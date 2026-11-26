@@ -1,0 +1,149 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CheckAnswers from '../../components/CheckAnswers.astro';
+import ChoiceGroup from '../../components/ChoiceGroup.astro';
+import ErrorSummary from '../../components/ErrorSummary.astro';
+import Field from '../../components/Field.astro';
+import type { FieldErrors } from '../../lib/forms/errors';
+import {
+  REPORT_REASONS,
+  createReport,
+  validateReport,
+  type ReportReason,
+  type ReportValues,
+} from '../../lib/forms/report';
+import { signPayload, verifyPayload } from '../../lib/forms/signedPayload';
+import { getEventBySlug } from '../../lib/events/query';
+import { LIMITS, allow, clientIp } from '../../lib/security/ratelimit';
+
+const event = await getEventBySlug(Astro.params.slug ?? '');
+if (!event) return Astro.rewrite('/404');
+const PURPOSE = `report:${event.id}`;
+const action = `/report/${event.slug}`;
+
+let view: 'form' | 'check' | 'done' = 'form';
+let values: ReportValues = { reason: '', details: '', email: '' };
+let errors: FieldErrors = {};
+const general: string[] = [];
+let payload = '';
+let already = false;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const step = String(form.get('step') ?? 'check');
+  if (step === 'check') {
+    values = {
+      reason: String(form.get('reason') ?? ''),
+      details: String(form.get('details') ?? '').trim(),
+      email: String(form.get('email') ?? '').trim(),
+    };
+    errors = validateReport(values);
+    if (!Object.keys(errors).length) {
+      view = 'check';
+      payload = signPayload(PURPOSE, values);
+    }
+  } else {
+    const draft = verifyPayload<ReportValues>(PURPOSE, String(form.get('payload') ?? ''));
+    if (!draft) general.push('Something went wrong with your answers. Please fill in the form again.');
+    else if (step === 'edit') values = draft.data;
+    else if (step === 'confirm') {
+      if (!(await allow(LIMITS.reportPerIp, clientIp(Astro.request, Astro.clientAddress)))) {
+        values = draft.data;
+        general.push(
+          'You have sent a lot of reports from this connection in the last hour. Wait an hour and try again.',
+        );
+      } else {
+        already = (await createReport(event, draft.data, draft.nonce)) === 'already_submitted';
+        view = 'done';
+      }
+    }
+  }
+}
+---
+
+<BaseLayout
+  title={view === 'check' ? 'Check your report' : view === 'done' ? 'Report sent' : 'Report a problem'}
+  breadcrumbs={[{ href: `/events/${event.slug}`, label: event.title }]}
+  noindex
+>
+  {view === 'done' ? (
+    <div class="notice notice--success flow-tight" tabindex="-1" data-focus-on-load>
+      <h1>{already ? 'You have already sent this report' : 'Report sent'}</h1>
+      <p>Thank you. A person will look at it and fix the event if needed.</p>
+      <p>
+        <a href={`/events/${event.slug}`}>Go back to {event.title}</a>
+      </p>
+    </div>
+  ) : view === 'check' ? (
+    <>
+      <div class="page-head">
+        <h1 tabindex="-1" data-focus-on-load>
+          Check your report
+        </h1>
+        <p class="lede">
+          About <span lang={event.lang}>{event.title}</span>.
+        </p>
+      </div>
+      <form method="post" action={action} class="flow">
+        <input type="hidden" name="payload" value={payload} />
+        <CheckAnswers
+          action={action}
+          rows={[
+            { label: 'What the problem is', value: REPORT_REASONS[values.reason as ReportReason], field: 'f-reason' },
+            { label: 'Details', value: values.details, field: 'f-details' },
+            { label: 'Your email address', value: values.email, field: 'f-email' },
+          ]}
+        />
+        <div class="button-row">
+          <button type="submit" name="step" value="confirm">
+            Send report
+          </button>
+        </div>
+      </form>
+    </>
+  ) : (
+    <>
+      <div class="page-head">
+        <h1>Report a problem</h1>
+        <p class="lede">
+          Tell us what's wrong with <span lang={event.lang}>{event.title}</span>.
+        </p>
+      </div>
+      <ErrorSummary errors={errors} general={general} />
+      <form method="post" action={action} class="flow" novalidate>
+        <input type="hidden" name="step" value="check" />
+        <ChoiceGroup
+          name="reason"
+          legend="What is the problem?"
+          type="radio"
+          required
+          value={values.reason}
+          error={errors.reason}
+          options={Object.entries(REPORT_REASONS).map(([value, label]) => ({ value, label }))}
+        />
+        <Field
+          name="details"
+          label="Details"
+          type="textarea"
+          rows={5}
+          value={values.details}
+          error={errors.details}
+          maxlength={2000}
+          hint="For example, the right date or a working link."
+        />
+        <Field
+          name="email"
+          label="Your email address"
+          type="email"
+          value={values.email}
+          error={errors.email}
+          autocomplete="email"
+          hint="Only if you'd like us to reply."
+        />
+        <div class="button-row">
+          <button type="submit">Continue</button>
+        </div>
+      </form>
+    </>
+  )}
+</BaseLayout>

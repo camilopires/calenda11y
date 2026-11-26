@@ -1,0 +1,208 @@
+---
+import Field from './Field.astro';
+import ChoiceGroup from './ChoiceGroup.astro';
+import type { FieldErrors } from '../lib/forms/errors';
+import { LANGUAGES, LIMITS, languageName, type EventFormValues } from '../lib/forms/event';
+import { ACCESS_LABELS, ACCESS_PROVISIONS, FORMAT_LABELS, FORMATS } from '../lib/events/model';
+import { allCountries } from '../lib/events/countries';
+import { timeZones } from '../lib/events/tz';
+
+interface Props {
+  values: EventFormValues;
+  errors: FieldErrors;
+}
+const { values: v, errors: e } = Astro.props;
+const countries = await allCountries();
+const zones = timeZones();
+---
+
+<fieldset class="flow form-section">
+  <legend>About the event</legend>
+  <Field name="title" label="Event name" value={v.title} error={e.title} required maxlength={LIMITS.title} />
+  <Field
+    name="summary"
+    label="Summary"
+    type="textarea"
+    rows={3}
+    value={v.summary}
+    error={e.summary}
+    required
+    maxlength={LIMITS.summary}
+    hint="One or two short sentences in plain language, saying what the event is and who it's for. Up to 280 characters."
+  />
+  <Field
+    name="description"
+    label="More details"
+    type="textarea"
+    value={v.description}
+    error={e.description}
+    maxlength={LIMITS.description}
+    hint="Talks, speakers, schedule, or anything else people should know. Leave a blank line between paragraphs."
+  />
+  <Field
+    name="lang"
+    label="Language the event is in"
+    type="select"
+    value={v.lang}
+    error={e.lang}
+    required
+    options={LANGUAGES.map((l) => ({ value: l, label: languageName(l) }))}
+  />
+  <Field
+    name="organiser"
+    label="Who is running it"
+    value={v.organiser}
+    error={e.organiser}
+    required
+    maxlength={LIMITS.organiser}
+    autocomplete="organization"
+  />
+  <Field
+    name="url"
+    label="Event website"
+    type="url"
+    inputmode="url"
+    value={v.url}
+    error={e.url}
+    required
+    hint="Where people can find out more or sign up, starting with https://"
+    autocomplete="url"
+  />
+</fieldset>
+
+<fieldset class="flow form-section">
+  <legend>When</legend>
+  <ChoiceGroup
+    name="timing"
+    legend="Does the event have start and end times?"
+    type="radio"
+    required
+    value={v.timing}
+    error={e.timing}
+    options={[
+      { value: 'timed', label: 'Yes, it has times' },
+      { value: 'all_day', label: 'No, it runs all day', hint: 'For example a conference that runs over whole days.' },
+    ]}
+  />
+  <div class="filters__grid filters__grid--pair">
+    <Field name="start_date" label="Start date" type="date" value={v.start_date} error={e.start_date} required />
+    <Field
+      name="start_time"
+      label="Start time"
+      type="time"
+      value={v.start_time}
+      error={e.start_time}
+      hint="Leave blank if it runs all day."
+      showOptional={false}
+    />
+    <Field
+      name="end_date"
+      label="End date"
+      type="date"
+      value={v.end_date}
+      error={e.end_date}
+      hint="Leave blank if it ends on the same day."
+    />
+    <Field
+      name="end_time"
+      label="End time"
+      type="time"
+      value={v.end_time}
+      error={e.end_time}
+      hint="Leave blank if it runs all day."
+      showOptional={false}
+    />
+  </div>
+  <Field
+    name="timezone"
+    label="Time zone"
+    type="select"
+    value={v.timezone}
+    error={e.timezone}
+    required
+    hint="The time zone of the times above. For online events, choose the organiser's time zone."
+    options={[
+      { value: '', label: 'Choose a time zone' },
+      ...zones.map((z) => ({ value: z, label: z.replace(/_/g, ' ') })),
+    ]}
+  />
+</fieldset>
+
+<fieldset class="flow form-section">
+  <legend>Where</legend>
+  <ChoiceGroup
+    name="format"
+    legend="How can people attend?"
+    type="radio"
+    required
+    value={v.format}
+    error={e.format}
+    options={FORMATS.map((f) => ({ value: f, label: FORMAT_LABELS[f] }))}
+  />
+  <Field
+    name="country"
+    label="Country"
+    type="select"
+    value={v.country}
+    error={e.country}
+    hint="Not needed for online-only events."
+    showOptional={false}
+    options={[{ value: '', label: 'Choose a country' }, ...countries.map((c) => ({ value: c.code, label: c.name }))]}
+    autocomplete="country"
+  />
+  <Field
+    name="city"
+    label="Town or city"
+    value={v.city}
+    error={e.city}
+    hint="Not needed for online-only events."
+    showOptional={false}
+    maxlength={LIMITS.city}
+    autocomplete="address-level2"
+  />
+  <Field name="venue" label="Venue and address" value={v.venue} error={e.venue} maxlength={LIMITS.venue} />
+</fieldset>
+
+<fieldset class="flow form-section">
+  <legend>Price and access</legend>
+  <ChoiceGroup
+    name="price"
+    legend="Is it free?"
+    type="radio"
+    required
+    value={v.price}
+    error={e.price}
+    options={[
+      { value: 'free', label: 'Yes, it is free' },
+      { value: 'paid', label: 'No, people need to pay' },
+    ]}
+  />
+  <ChoiceGroup
+    name="access"
+    legend="Access provisions"
+    hint="Choose everything the event will definitely have."
+    type="checkbox"
+    value={v.access}
+    error={e.access}
+    options={ACCESS_PROVISIONS.map((a) => ({ value: a, label: ACCESS_LABELS[a] }))}
+  />
+  <Field
+    name="access_notes"
+    label="Access details"
+    type="textarea"
+    rows={4}
+    value={v.access_notes}
+    error={e.access_notes}
+    maxlength={LIMITS.accessNotes}
+    hint="For example which sign language, where the step-free entrance is, or who to contact about access needs."
+  />
+</fieldset>
+
+<script>
+  // If no time zone is chosen yet, suggest the visitor's own. They can change it.
+  const zone = document.querySelector<HTMLSelectElement>('select[name="timezone"]');
+  if (zone && !zone.value) {
+    const mine = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if ([...zone.options].some((o) => o.value === mine)) zone.value = mine;
+  }
+</script>

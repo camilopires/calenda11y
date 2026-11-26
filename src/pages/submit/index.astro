@@ -1,0 +1,198 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CheckAnswers from '../../components/CheckAnswers.astro';
+import ErrorSummary from '../../components/ErrorSummary.astro';
+import EventFields from '../../components/EventFields.astro';
+import Field from '../../components/Field.astro';
+import Turnstile from '../../components/Turnstile.astro';
+import { eventAnswerRows, localDates } from '../../lib/forms/answers';
+import type { FieldErrors } from '../../lib/forms/errors';
+import {
+  EMPTY_EVENT_FORM,
+  readEventForm,
+  readSubmitter,
+  validateEvent,
+  validateSubmitter,
+  type EventFormValues,
+  type EventRecord,
+  type SubmitterValues,
+} from '../../lib/forms/event';
+import { signPayload, verifyPayload } from '../../lib/forms/signedPayload';
+import { createSubmission } from '../../lib/forms/submissions';
+import { LIMITS as RATE, allow, clientIp } from '../../lib/security/ratelimit';
+import { captcha, type CaptchaResult } from '../../lib/services/captcha';
+
+interface Draft {
+  values: EventFormValues;
+  submitter: SubmitterValues;
+  captcha: CaptchaResult;
+}
+const PURPOSE = 'submit-event';
+
+let view: 'form' | 'check' = 'form';
+let values: EventFormValues = EMPTY_EVENT_FORM;
+let submitter: SubmitterValues = { name: '', email: '' };
+let errors: FieldErrors = {};
+const general: string[] = [];
+let payload = '';
+let checked: EventRecord | undefined;
+let captchaResult: CaptchaResult = 'unverified';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const step = String(form.get('step') ?? 'check');
+  const ip = clientIp(Astro.request, Astro.clientAddress);
+  // A previous step's captcha result, carried in a signed field.
+  const carried = verifyPayload<CaptchaResult>('captcha', String(form.get('captcha_result') ?? ''));
+
+  if (step === 'check') {
+    values = readEventForm(form);
+    submitter = readSubmitter(form);
+    if (String(form.get('website') ?? '') !== '') {
+      // The hidden honeypot field was filled in: almost certainly a bot.
+      console.warn('[submit] honeypot filled; not saving');
+      return Astro.redirect('/submit/done', 303);
+    }
+    const result = validateEvent(values, { now: new Date() });
+    errors = { ...(result.ok ? {} : result.errors), ...validateSubmitter(submitter) };
+    captchaResult =
+      carried?.data === 'verified'
+        ? 'verified'
+        : await captcha().verify(String(form.get('cf-turnstile-response') ?? '') || null, ip, PURPOSE);
+
+    if (Object.keys(errors).length === 0 && result.ok) {
+      const limit = captchaResult === 'verified' ? RATE.submitPerIp : RATE.submitUnverifiedPerIp;
+      if (!(await allow(limit, ip))) {
+        general.push(
+          'You have added a lot of events from this connection in the last hour. Wait an hour and try again, or email hello@calenda11y.org.',
+        );
+      } else {
+        view = 'check';
+        checked = result.record;
+        payload = signPayload<Draft>(PURPOSE, { values, submitter, captcha: captchaResult });
+      }
+    }
+  } else {
+    const draft = verifyPayload<Draft>(PURPOSE, String(form.get('payload') ?? ''));
+    if (!draft) {
+      general.push('Something went wrong with your answers, so we could not keep them. Please fill in the form again.');
+    } else if (step === 'edit') {
+      values = draft.data.values;
+      submitter = draft.data.submitter;
+      captchaResult = draft.data.captcha;
+    } else if (step === 'confirm') {
+      // Check again: time has passed since the answers were checked.
+      const result = validateEvent(draft.data.values, { now: new Date() });
+      if (!result.ok) {
+        values = draft.data.values;
+        submitter = draft.data.submitter;
+        captchaResult = draft.data.captcha;
+        errors = result.errors;
+      } else {
+        const outcome = await createSubmission(result.record, draft.data.submitter, draft.data.captcha, draft.nonce);
+        return Astro.redirect(outcome.status === 'created' ? '/submit/done' : '/submit/done?already=1', 303);
+      }
+    }
+  }
+}
+
+const dates = checked ? localDates(checked) : undefined;
+const captchaToken = signPayload('captcha', captchaResult);
+const title = view === 'check' ? 'Check your answers' : 'Add an event';
+---
+
+<BaseLayout
+  title={title}
+  nav="submit"
+  breadcrumbs={view === 'check' ? [{ href: '/submit', label: 'Add an event' }] : []}
+>
+  {view === 'check' && checked && dates ? (
+    <>
+      <div class="page-head">
+        <h1 tabindex="-1" data-focus-on-load>
+          Check your answers
+        </h1>
+        <p class="lede">Make sure everything is right before you send the event for review.</p>
+      </div>
+      <form method="post" action="/submit" class="flow">
+        <input type="hidden" name="payload" value={payload} />
+        <h2>Event</h2>
+        <CheckAnswers rows={eventAnswerRows(values, checked, dates.start, dates.end)} action="/submit" />
+        <h2>Your details</h2>
+        <CheckAnswers
+          action="/submit"
+          rows={[
+            { label: 'Your name', value: submitter.name, field: 'f-submitter_name' },
+            { label: 'Your email address', value: submitter.email, field: 'f-submitter_email' },
+          ]}
+        />
+        <h2>Send the event</h2>
+        <p>
+          A person will check the event before it appears, usually within 2 working days. We'll email you when it's
+          published.
+        </p>
+        <div class="button-row">
+          <button type="submit" name="step" value="confirm">
+            Send for review
+          </button>
+        </div>
+      </form>
+    </>
+  ) : (
+    <>
+      <div class="page-head">
+        <h1>Add an event</h1>
+        <p class="lede">Tell us about an accessibility event. It's free, and you don't need an account.</p>
+      </div>
+      <ErrorSummary
+        errors={errors}
+        general={general}
+        targets={{ timing: 'f-timing', format: 'f-format', price: 'f-price', access: 'f-access' }}
+      />
+      <div class="notice flow-tight">
+        <p>Before you start, you'll need:</p>
+        <ul>
+          <li>the date, time and time zone of the event</li>
+          <li>a link to the event website</li>
+          <li>details of any access provisions, like captions or a step-free venue</li>
+        </ul>
+        <p>You'll be able to check everything before you send it.</p>
+      </div>
+      <form method="post" action="/submit" class="flow" novalidate>
+        <input type="hidden" name="step" value="check" />
+        <input type="hidden" name="captcha_result" value={captchaToken} />
+        <EventFields values={values} errors={errors} />
+        <fieldset class="flow">
+          <legend>About you</legend>
+          <p class="hint">We only use these to tell you about this event. We never show them on the site.</p>
+          <Field
+            name="submitter_name"
+            label="Your name"
+            value={submitter.name}
+            error={errors.submitter_name}
+            autocomplete="name"
+            maxlength={200}
+          />
+          <Field
+            name="submitter_email"
+            label="Your email address"
+            type="email"
+            value={submitter.email}
+            error={errors.submitter_email}
+            required
+            autocomplete="email"
+            inputmode="email"
+          />
+        </fieldset>
+        <div class="honeypot" aria-hidden="true">
+          <label for="website">Leave this empty</label>
+          <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
+        </div>
+        <Turnstile action="submit-event" />
+        <div class="button-row">
+          <button type="submit">Continue</button>
+        </div>
+      </form>
+    </>
+  )}
+</BaseLayout>

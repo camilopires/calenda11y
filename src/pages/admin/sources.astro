@@ -1,0 +1,14 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { requireAdmin } from '../../lib/admin/auth';
+
+const guard = await requireAdmin(Astro);
+if (!guard.ok) return guard.response;
+---
+
+<AdminLayout title="Import sources" admin={guard.admin} current="sources">
+  <div class="page-head">
+    <h1>Import sources</h1>
+    <p class="lede">Nothing here yet.</p>
+  </div>
+</AdminLayout>

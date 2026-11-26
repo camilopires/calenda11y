@@ -1,0 +1,277 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import ErrorSummary from '../../../components/ErrorSummary.astro';
+import EventFields from '../../../components/EventFields.astro';
+import Field from '../../../components/Field.astro';
+import { requireAdmin, takeDraft } from '../../../lib/admin/auth';
+import { VersionConflict, getAdminEvent, moderate, saveEvent, type ModerationAction } from '../../../lib/admin/events';
+import { describeWhen } from '../../../lib/events/dates';
+import { readEventForm, recordToForm, validateEvent, type EventFormValues } from '../../../lib/forms/event';
+import type { FieldErrors } from '../../../lib/forms/errors';
+
+const guard = await requireAdmin(Astro);
+if (!guard.ok) return guard.response;
+const id = Astro.params.id ?? '';
+let detail = await getAdminEvent(id);
+if (!detail) return Astro.rewrite('/404');
+
+let values: EventFormValues = recordToForm(detail.event);
+let version = detail.event.version;
+let errors: FieldErrors = {};
+const general: string[] = [];
+let view: 'detail' | 'reject' = 'detail';
+let rejectReason = '';
+let restored = false;
+const saved = Astro.url.searchParams.get('saved') === '1';
+
+const done: Record<ModerationAction, string> = {
+  approve: 'approved',
+  reject: 'rejected',
+  unpublish: 'unpublished',
+  cancel: 'cancelled',
+  restore: 'approved',
+};
+
+let form = guard.form;
+if (!form && Astro.request.method === 'GET') {
+  // Restore what the admin had typed if their session expired while saving.
+  form = await takeDraft(Astro);
+  restored = form !== null;
+}
+
+if (form) {
+  const step = String(form.get('step') ?? '');
+  const sentVersion = Number(form.get('version'));
+  try {
+    if (step === 'save' || restored) {
+      values = readEventForm(form);
+      if (restored) {
+        version = Number.isInteger(sentVersion) && sentVersion > 0 ? sentVersion : version;
+      } else {
+        const result = validateEvent(values, { now: new Date(), allowPast: true });
+        if (!result.ok) errors = result.errors;
+        else {
+          await saveEvent(detail.event.id, sentVersion, result.record);
+          return Astro.redirect(`/admin/events/${detail.event.id}?saved=1`, 303);
+        }
+      }
+    } else if (step === 'reject-check') {
+      view = 'reject';
+    } else if (step === 'reject') {
+      rejectReason = String(form.get('reason') ?? '').trim();
+      if (!rejectReason) {
+        view = 'reject';
+        errors = { reason: 'Enter why the event is not being published. We send this to the person who added it.' };
+      } else if (rejectReason.length > 2000) {
+        view = 'reject';
+        errors = { reason: 'The reason must be 2,000 characters or fewer' };
+      } else {
+        await moderate(detail, 'reject', sentVersion, rejectReason);
+        return Astro.redirect('/admin?done=rejected', 303);
+      }
+    } else if (step === 'approve' || step === 'unpublish' || step === 'cancel' || step === 'restore') {
+      await moderate(detail, step, sentVersion);
+      return Astro.redirect(
+        step === 'restore' ? `/admin/events/${detail.event.id}?saved=1` : `/admin?done=${done[step]}`,
+        303,
+      );
+    }
+  } catch (err) {
+    if (!(err instanceof VersionConflict)) throw err;
+    general.push(
+      'Someone else changed this event while you were working on it. The latest version is shown below. Check it, then make your change again.',
+    );
+    detail = (await getAdminEvent(id))!;
+    version = detail.event.version;
+    if (step !== 'save') values = recordToForm(detail.event);
+  }
+}
+
+const e = detail.event;
+const when = describeWhen(e);
+const published = e.status === 'approved' || e.status === 'cancelled';
+const STATUS: Record<string, string> = {
+  pending: 'Waiting for review',
+  approved: 'Published',
+  rejected: 'Rejected',
+  cancelled: 'Published as cancelled',
+};
+---
+
+<AdminLayout
+  title={view === 'reject' ? `Reject: ${e.title}` : e.title}
+  admin={guard.admin}
+  current="queue"
+  breadcrumbs={view === 'reject' ? [{ href: `/admin/events/${e.id}`, label: e.title }] : []}
+>
+  {view === 'reject' ? (
+    <>
+      <div class="page-head">
+        <h1 tabindex="-1" data-focus-on-load>
+          Reject this event?
+        </h1>
+        <p class="lede">
+          "<span lang={e.lang}>{e.title}</span>" won't be published.
+          {detail.submitter?.email ? ' We will email the person who added it, with your reason.' : ''}
+        </p>
+      </div>
+      <ErrorSummary errors={errors} />
+      <form method="post" class="flow" novalidate>
+        <input type="hidden" name="version" value={version} />
+        <Field
+          name="reason"
+          label="Reason"
+          type="textarea"
+          rows={4}
+          value={rejectReason}
+          error={errors.reason}
+          required
+          hint="Write it for the person who added the event, in plain language."
+          maxlength={2000}
+        />
+        <div class="button-row">
+          <button type="submit" name="step" value="reject" class="button--danger">
+            Reject event
+          </button>
+          <a class="link-standalone" href={`/admin/events/${e.id}`}>
+            Go back without rejecting
+          </a>
+        </div>
+      </form>
+    </>
+  ) : (
+    <>
+      <div class="page-head">
+        <h1 lang={e.lang}>{e.title}</h1>
+        <p class="lede">
+          {STATUS[e.status]}. {when.date}, {when.time}.
+        </p>
+      </div>
+
+      <ErrorSummary
+        errors={errors}
+        general={general}
+        targets={{ timing: 'f-timing', format: 'f-format', price: 'f-price', access: 'f-access' }}
+      />
+      {saved && (
+        <div class="notice notice--success" role="status" tabindex="-1" data-focus-on-load>
+          <p>Saved.</p>
+        </div>
+      )}
+      {restored && (
+        <div class="notice notice--important" role="status" tabindex="-1" data-focus-on-load>
+          <p>
+            You were signed out while saving, so we kept your changes. They're in the form below. Check them, then
+            choose "Save changes".
+          </p>
+        </div>
+      )}
+
+      <section aria-labelledby="about" class="flow">
+        <h2 id="about">About this event</h2>
+        <dl class="details-list">
+          <dt>Status</dt>
+          <dd>
+            {STATUS[e.status]}
+            {published && (
+              <>
+                {' '}
+                (<a href={`/events/${e.slug}`}>see it on the site</a>)
+              </>
+            )}
+          </dd>
+          <dt>Came from</dt>
+          <dd>{e.source === 'form' ? 'The submit form' : `Import: ${detail.sourceName ?? e.source}`}</dd>
+          <dt>Added by</dt>
+          <dd>
+            {detail.submitter?.email
+              ? `${detail.submitter.name ? `${detail.submitter.name}, ` : ''}${detail.submitter.email}`
+              : 'Not known'}
+          </dd>
+          <dt>Flags</dt>
+          <dd>{e.flags.length ? e.flags.join(', ').replace(/_/g, ' ') : 'None'}</dd>
+          {detail.submitter?.rejection_reason && e.status === 'rejected' && (
+            <>
+              <dt>Rejected because</dt>
+              <dd>{detail.submitter.rejection_reason}</dd>
+            </>
+          )}
+        </dl>
+        {detail.duplicates.length > 0 && (
+          <div class="notice notice--important flow-tight">
+            <h3>This might be a duplicate of</h3>
+            <ul>
+              {detail.duplicates.map((d) => (
+                <li>
+                  <a href={`/admin/events/${d.id}`}>{d.title}</a>, {d.local_start_date} ({STATUS[d.status] ?? d.status},{' '}
+                  {Math.round(d.score * 100)}% similar name)
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+
+      <section aria-labelledby="decide" class="flow">
+        <h2 id="decide">Decide</h2>
+        {e.status === 'pending' && (
+          <div class="notice flow-tight">
+            <p>Before you publish, check that:</p>
+            <ul>
+              <li>it's about accessibility</li>
+              <li>the summary explains the event in plain language, without jargon</li>
+              <li>the date, time and time zone look right</li>
+              <li>the website link works</li>
+            </ul>
+          </div>
+        )}
+        <form method="post" class="button-row">
+          <input type="hidden" name="version" value={version} />
+          {(e.status === 'pending' || e.status === 'rejected') && (
+            <button type="submit" name="step" value="approve">
+              Publish
+            </button>
+          )}
+          {e.status === 'pending' && (
+            <button type="submit" name="step" value="reject-check" class="button--secondary">
+              Reject
+            </button>
+          )}
+          {e.status === 'approved' && (
+            <button type="submit" name="step" value="unpublish" class="button--secondary">
+              Take off the site
+            </button>
+          )}
+          {e.status === 'approved' && (
+            <button type="submit" name="step" value="cancel" class="button--secondary">
+              Mark as cancelled
+            </button>
+          )}
+          {e.status === 'cancelled' && (
+            <button type="submit" name="step" value="restore" class="button--secondary">
+              Publish again (not cancelled)
+            </button>
+          )}
+        </form>
+        {e.status === 'approved' && (
+          <p class="hint">
+            Taking it off the site puts it back in the review list. You can publish it again at any time.
+          </p>
+        )}
+      </section>
+
+      <section aria-labelledby="edit">
+        <h2 id="edit">Edit details</h2>
+        <form method="post" class="flow" novalidate>
+          <input type="hidden" name="version" value={version} />
+          <EventFields values={values} errors={errors} />
+          <div class="button-row">
+            <button type="submit" name="step" value="save">
+              Save changes
+            </button>
+          </div>
+        </form>
+      </section>
+    </>
+  )}
+</AdminLayout>

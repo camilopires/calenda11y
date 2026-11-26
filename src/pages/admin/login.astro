@@ -1,0 +1,81 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ErrorSummary from '../../components/ErrorSummary.astro';
+import Field from '../../components/Field.astro';
+import { authClient, safeNext } from '../../lib/admin/auth';
+import { env } from '../../lib/env';
+import { isEmail } from '../../lib/forms/event';
+import { LIMITS, allow, clientIp } from '../../lib/security/ratelimit';
+
+const next = safeNext(Astro.url.searchParams.get('next'));
+const expired = Astro.url.searchParams.get('expired') === '1';
+const linkProblem = Astro.url.searchParams.get('error') === 'link';
+const signedOut = Astro.url.searchParams.get('signed_out') === '1';
+let email = '';
+let errors: Record<string, string> = {};
+let sent = false;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  email = String(form.get('email') ?? '').trim();
+  if (!isEmail(email)) errors = { email: 'Enter an email address in the right format, like name@example.com' };
+  else if (!(await allow(LIMITS.adminLoginPerIp, clientIp(Astro.request, Astro.clientAddress)))) {
+    errors = { email: 'Too many sign-in links were asked for from this connection. Wait an hour and try again.' };
+  } else {
+    const redirect = new URL('/admin/auth/callback', env().SITE_URL);
+    redirect.searchParams.set('next', next);
+    const { error } = await authClient(Astro).auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: false, emailRedirectTo: redirect.href },
+    });
+    // Unknown addresses get the same answer, so this page can't be used to find out who the admins are.
+    if (error) console.info(`[admin login] no link sent: ${error.message}`);
+    sent = true;
+  }
+}
+---
+
+<BaseLayout title="Sign in to admin" nav="admin" noindex crumbLabel="Admin sign in">
+  <div class="page-head">
+    <h1>Sign in to admin</h1>
+    <p class="lede">For people who check events for calenda11y.</p>
+  </div>
+  {expired && (
+    <div class="notice notice--important" role="status">
+      <p>You were signed out. Sign in again and we'll bring back what you were working on.</p>
+    </div>
+  )}
+  {linkProblem && (
+    <div class="notice notice--error" role="alert">
+      <p>That sign-in link has expired or has already been used. Ask for a new one below.</p>
+    </div>
+  )}
+  {signedOut && (
+    <div class="notice notice--success" role="status">
+      <p>You're signed out.</p>
+    </div>
+  )}
+  {sent ? (
+    <div class="notice notice--success flow-tight" tabindex="-1" data-focus-on-load>
+      <h2>Check your email</h2>
+      <p>If {email} belongs to an admin, we've sent a sign-in link to it. The link works once.</p>
+    </div>
+  ) : (
+    <>
+      <ErrorSummary errors={errors} />
+      <form method="post" class="flow" novalidate>
+        <Field
+          name="email"
+          label="Email address"
+          type="email"
+          value={email}
+          error={errors.email}
+          required
+          autocomplete="email"
+          hint="We'll email you a link to sign in. There's no password."
+        />
+        <button type="submit">Email me a sign-in link</button>
+      </form>
+    </>
+  )}
+</BaseLayout>

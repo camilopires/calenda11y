@@ -1,0 +1,109 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { requireAdmin } from '../../lib/admin/auth';
+import { db } from '../../lib/db';
+import { REPORT_REASONS, type ReportReason } from '../../lib/forms/report';
+import { unwrap } from '../../lib/result';
+
+const guard = await requireAdmin(Astro);
+if (!guard.ok) return guard.response;
+
+if (guard.form) {
+  const id = String(guard.form.get('report') ?? '');
+  const undo = guard.form.get('step') === 'reopen';
+  if (/^[0-9a-f-]{36}$/.test(id)) {
+    unwrap(
+      await db()
+        .from('event_reports')
+        .update(
+          undo
+            ? { resolved_at: null, resolved_by: null }
+            : { resolved_at: new Date().toISOString(), resolved_by: guard.admin.userId },
+        )
+        .eq('id', id)
+        .select('id'),
+      'supabase',
+      'updating report',
+    );
+  }
+  return Astro.redirect(`/admin/reports?done=${undo ? 'reopened' : 'resolved'}&id=${id}`, 303);
+}
+
+const showResolved = Astro.url.searchParams.get('show') === 'resolved';
+let q = db()
+  .from('event_reports')
+  .select('id, reason, details, reporter_email, created_at, resolved_at, event:events(id, title, lang)')
+  .order('created_at', { ascending: false })
+  .limit(100);
+q = showResolved ? q.not('resolved_at', 'is', null) : q.is('resolved_at', null);
+const reports = unwrap(await q, 'supabase', 'listing reports') as unknown as Array<{
+  id: string;
+  reason: ReportReason;
+  details: string | null;
+  reporter_email: string | null;
+  created_at: string;
+  resolved_at: string | null;
+  event: { id: string; title: string; lang: string };
+}>;
+const done = Astro.url.searchParams.get('done');
+const doneId = Astro.url.searchParams.get('id');
+---
+
+<AdminLayout title="Reports" admin={guard.admin} current="reports">
+  <div class="page-head">
+    <h1>Reports</h1>
+    <p class="lede">Problems people have reported with events.</p>
+  </div>
+  {done && (
+    <div class="notice notice--success flow-tight" role="status" tabindex="-1" data-focus-on-load>
+      <p>{done === 'resolved' ? 'Report marked as dealt with.' : 'Report opened again.'}</p>
+      {done === 'resolved' && doneId && (
+        <form method="post">
+          <input type="hidden" name="report" value={doneId} />
+          <button type="submit" name="step" value="reopen" class="button--secondary">
+            Undo
+          </button>
+        </form>
+      )}
+    </div>
+  )}
+  <nav aria-label="Report lists" class="view-tabs">
+    <a href="/admin/reports" aria-current={!showResolved ? 'page' : undefined}>
+      Open
+    </a>
+    <a href="/admin/reports?show=resolved" aria-current={showResolved ? 'page' : undefined}>
+      Dealt with
+    </a>
+  </nav>
+  {reports.length === 0 ? (
+    <p>There are no {showResolved ? 'dealt-with' : 'open'} reports.</p>
+  ) : (
+    <ul class="bare-list flow">
+      {reports.map((r) => (
+        <li class="notice flow-tight">
+          <h2 class="small">
+            <a href={`/admin/events/${r.event.id}`} lang={r.event.lang}>
+              {r.event.title}
+            </a>
+          </h2>
+          <p>
+            <strong>{REPORT_REASONS[r.reason]}</strong>
+          </p>
+          {r.details && <p>{r.details}</p>}
+          <p class="small muted">
+            {new Date(r.created_at).toUTCString()}
+            {r.reporter_email && <>, from {r.reporter_email}</>}
+          </p>
+          {!r.resolved_at && (
+            <form method="post">
+              <input type="hidden" name="report" value={r.id} />
+              <button type="submit" class="button--secondary">
+                Mark as dealt with<span class="visually-hidden">: report about {r.event.title}</span>
+              </button>
+            </form>
+          )}
+        </li>
+      ))}
+    </ul>
+  )}
+</AdminLayout>

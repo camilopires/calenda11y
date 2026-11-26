@@ -410,6 +410,7 @@ legend {
 
 .field {
   display: grid;
+  align-content: start;
   gap: var(--space-1);
   max-inline-size: var(--measure);
 }
@@ -991,4 +992,134 @@ svg {
 
 input[readonly] {
   background: var(--c-bg);
+}
+
+/* ---------- Check your answers ---------- */
+
+.check-answers {
+  max-inline-size: 48rem;
+  border-block-start: 1px solid var(--c-border);
+}
+
+.check-answers__row {
+  display: grid;
+  gap: var(--space-2) var(--space-5);
+  padding-block: var(--space-4);
+  border-block-end: 1px solid var(--c-border);
+}
+
+@media (min-width: 40em) {
+  .check-answers__row {
+    grid-template-columns: 14rem 1fr auto;
+    align-items: start;
+  }
+}
+
+.check-answers dd {
+  margin: 0;
+}
+
+.check-answers dd ul {
+  padding-inline-start: var(--space-5);
+}
+
+/* ---------- Admin ---------- */
+
+.admin-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  align-items: center;
+  padding-block-end: var(--space-4);
+  margin-block-end: var(--space-5);
+  border-block-end: var(--border-width) solid var(--c-rule);
+}
+
+.admin-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  max-inline-size: none;
+}
+
+.admin-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--target-min);
+  font-weight: 600;
+}
+
+.admin-nav a[aria-current='page'] {
+  text-decoration-thickness: 0.25em;
+}
+
+.admin-bar__account {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.notice + .notice,
+.admin-bar + .notice {
+  margin-block-end: var(--space-5);
+}
+
+.view-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-block-end: var(--space-5);
+}
+
+.view-tabs a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--target-min);
+}
+
+.view-tabs a[aria-current='page'] {
+  font-weight: 700;
+  text-decoration-thickness: 0.25em;
+}
+
+.table-scroll {
+  position: relative;
+  overflow-x: auto;
+  max-inline-size: 100%;
+}
+
+.diff-old {
+  text-decoration: line-through;
+}
+
+/* Form sections: a top-level fieldset reads like a page section. */
+.form-section {
+  padding-block-start: var(--space-5);
+  border-block-start: var(--border-width) solid var(--c-rule);
+}
+
+.form-section + .form-section {
+  margin-block-start: var(--space-7);
+}
+
+.form-section > legend {
+  float: left;
+  inline-size: 100%;
+  font-size: var(--step-2);
+  margin-block-end: var(--space-4);
+}
+
+.form-section > legend + * {
+  clear: both;
+}
+
+/* Questions inside a section (ChoiceGroup legends) read like field labels. */
+legend.label {
+  font-size: var(--step-0);
+}
+
+.filters__grid--pair {
+  align-items: end;
 }

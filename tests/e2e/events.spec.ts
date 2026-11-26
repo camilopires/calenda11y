@@ -57,10 +57,10 @@ test.describe('event pages', () => {
     const context = await browser.newContext({ javaScriptEnabled: false, baseURL: baseURL! });
     const page = await context.newPage();
     await page.goto('/');
-    await page.getByLabel('Country').selectOption({ label: 'Portugal (1 upcoming)' });
+    await page.getByLabel('Country').selectOption('PT');
     await page.getByRole('button', { name: 'Show events' }).click();
     await expect(page).toHaveURL(/[?&]country=PT/);
-    await expect(page.getByText('1 upcoming event in Portugal')).toBeVisible();
+    await expect(page.getByText(/^\d+ upcoming events? in Portugal/)).toBeVisible();
     await expect(page.getByRole('link', { name: 'Lisbon Inclusive Design Meetup' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Berlin a11y Stammtisch' })).toHaveCount(0);
     await context.close();

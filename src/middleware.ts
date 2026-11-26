@@ -21,9 +21,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
   context.locals.display = parseDisplay(context.cookies.get(DISPLAY_COOKIE)?.value);
 
   let response = await next();
+  const isAdmin = context.url.pathname === '/admin' || context.url.pathname.startsWith('/admin/');
   const apply = (r: Response) => {
     for (const [name, value] of Object.entries(securityHeaders(config.APP_ENV === 'production'))) {
       if (!r.headers.has(name)) r.headers.set(name, value);
+    }
+    if (isAdmin) {
+      // Admin pages show private data: never cache or index them.
+      r.headers.set('Cache-Control', 'private, no-store');
+      r.headers.set('X-Robots-Tag', 'noindex, nofollow');
     }
     r.headers.set('Content-Security-Policy', withHeaderOnlyCsp(r.headers.get('Content-Security-Policy')));
   };

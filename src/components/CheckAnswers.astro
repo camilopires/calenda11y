@@ -1,0 +1,41 @@
+---
+/**
+ * A "Check your answers" list (WCAG 3.3.6). Each "Change" button submits the
+ * signed payload back to the form, scrolled to that field.
+ */
+import type { AnswerRow } from '../lib/forms/answers';
+
+interface Props {
+  rows: AnswerRow[];
+  action: string;
+}
+const { rows, action } = Astro.props;
+---
+
+<dl class="check-answers">
+  {rows.map((r) => (
+    <div class="check-answers__row">
+      <dt>{r.label}</dt>
+      <dd lang={r.lang}>
+        {Array.isArray(r.value) ? (
+          r.value.length ? (
+            <ul>
+              {r.value.map((x) => (
+                <li>{x}</li>
+              ))}
+            </ul>
+          ) : (
+            'None'
+          )
+        ) : (
+          r.value || 'Not given'
+        )}
+      </dd>
+      <dd class="check-answers__change">
+        <button type="submit" name="step" value="edit" formaction={`${action}#${r.field}`} class="button--secondary">
+          Change<span class="visually-hidden"> {r.label.toLowerCase()}</span>
+        </button>
+      </dd>
+    </div>
+  ))}
+</dl>

@@ -1,0 +1,109 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { requireAdmin } from '../../lib/admin/auth';
+import { VersionConflict, getAdminEvent, moderate } from '../../lib/admin/events';
+import { describeWhen } from '../../lib/events/dates';
+
+const guard = await requireAdmin(Astro);
+if (!guard.ok) return guard.response;
+if (!guard.form) return Astro.redirect('/admin', 303);
+
+const step = String(guard.form.get('step') ?? 'check');
+const selected = guard.form
+  .getAll('event')
+  .map(String)
+  .map((v) => /^([0-9a-f-]{36}):(\d+)$/.exec(v))
+  .filter((m): m is RegExpExecArray => m !== null)
+  .slice(0, 100)
+  .map((m) => ({ id: m[1]!, version: Number(m[2]) }));
+
+const details = (await Promise.all(selected.map(async (s) => ({ ...s, detail: await getAdminEvent(s.id) })))).filter(
+  (d) => d.detail && d.detail.event.status === 'pending',
+);
+
+const conflicts: string[] = [];
+if (step === 'confirm' && details.length) {
+  let published = 0;
+  for (const d of details) {
+    try {
+      await moderate(d.detail!, 'approve', d.version);
+      published++;
+    } catch (err) {
+      if (err instanceof VersionConflict) conflicts.push(d.detail!.event.title);
+      else throw err;
+    }
+  }
+  if (!conflicts.length) return Astro.redirect(`/admin?done=bulk&n=${published}`, 303);
+}
+---
+
+<AdminLayout title="Publish events" admin={guard.admin} current="queue">
+  {details.length === 0 ? (
+    <div class="page-head flow">
+      <h1 tabindex="-1" data-focus-on-load>
+        No events chosen
+      </h1>
+      <p>Go back and tick the events you want to publish.</p>
+      <p>
+        <a class="link-standalone" href="/admin">
+          Go back to the review list
+        </a>
+      </p>
+    </div>
+  ) : conflicts.length ? (
+    <div class="flow">
+      <h1 tabindex="-1" data-focus-on-load>
+        Some events weren't published
+      </h1>
+      <p>These changed while you were choosing, so we left them for you to check:</p>
+      <ul>
+        {conflicts.map((t) => (
+          <li>{t}</li>
+        ))}
+      </ul>
+      <p>
+        <a class="link-standalone" href="/admin">
+          Go back to the review list
+        </a>
+      </p>
+    </div>
+  ) : (
+    <>
+      <div class="page-head">
+        <h1 tabindex="-1" data-focus-on-load>
+          Publish {details.length} {details.length === 1 ? 'event' : 'events'}?
+        </h1>
+        <p class="lede">
+          Check the list. Each event will appear on the site straight away, and we'll email the people who added them.
+        </p>
+      </div>
+      <ul class="flow-tight">
+        {details.map((d) => {
+          const w = describeWhen(d.detail!.event);
+          return (
+            <li>
+              <a href={`/admin/events/${d.id}`} lang={d.detail!.event.lang}>
+                {d.detail!.event.title}
+              </a>
+              , {w.date}
+              {d.detail!.event.flags.length > 0 && (
+                <strong> (flagged: {d.detail!.event.flags.join(', ').replace(/_/g, ' ')})</strong>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <form method="post" class="button-row filters__actions">
+        {details.map((d) => (
+          <input type="hidden" name="event" value={`${d.id}:${d.version}`} />
+        ))}
+        <button type="submit" name="step" value="confirm">
+          Publish these events
+        </button>
+        <a class="link-standalone" href="/admin">
+          Go back without publishing
+        </a>
+      </form>
+    </>
+  )}
+</AdminLayout>

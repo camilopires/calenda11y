@@ -1,0 +1,61 @@
+---
+import BaseLayout, { type Crumb } from './BaseLayout.astro';
+import { problems } from '../lib/admin/health';
+import type { Admin } from '../lib/admin/auth';
+
+interface Props {
+  title: string;
+  admin: Admin;
+  breadcrumbs?: Crumb[];
+  current: 'queue' | 'reports' | 'emails' | 'sources' | 'jobs' | 'sponsors' | 'subscribers' | 'none';
+  /** The admin home page: its breadcrumb is just Home / Admin. */
+  isRoot?: boolean;
+}
+const { title, admin, breadcrumbs = [], current, isRoot = false } = Astro.props;
+const crumbs = isRoot ? [] : [{ href: '/admin', label: 'Admin' }, ...breadcrumbs];
+const issues = await problems();
+const nav = [
+  { key: 'queue', href: '/admin', label: 'Events' },
+  { key: 'reports', href: '/admin/reports', label: 'Reports' },
+  { key: 'sources', href: '/admin/sources', label: 'Import sources' },
+  { key: 'jobs', href: '/admin/jobs', label: 'Scheduled jobs' },
+  { key: 'emails', href: '/admin/email-outbox', label: 'Emails' },
+  { key: 'subscribers', href: '/admin/subscribers', label: 'Subscribers' },
+  { key: 'sponsors', href: '/admin/sponsors', label: 'Sponsors' },
+] as const;
+---
+
+<BaseLayout title={`${title} (admin)`} crumbLabel={isRoot ? 'Admin' : title} nav="admin" noindex breadcrumbs={crumbs}>
+  <div class="admin-bar">
+    <nav aria-label="Admin">
+      <ul class="bare-list admin-nav">
+        {nav.map((n) => (
+          <li>
+            <a href={n.href} aria-current={n.key === current ? 'page' : undefined}>
+              {n.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+    <form method="post" action="/admin/logout" class="admin-bar__account">
+      <span class="small">Signed in as {admin.email}</span>
+      <button type="submit" class="button--secondary">
+        Sign out
+      </button>
+    </form>
+  </div>
+  {issues.length > 0 && (
+    <div class="notice notice--error flow-tight" role="region" aria-labelledby="admin-problems">
+      <h2 id="admin-problems">Things that need attention</h2>
+      <ul>
+        {issues.map((p) => (
+          <li>
+            {p.message} <a href={p.href}>{p.linkText}</a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )}
+  <slot />
+</BaseLayout>

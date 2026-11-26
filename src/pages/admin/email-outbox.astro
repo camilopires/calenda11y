@@ -1,0 +1,121 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { requireAdmin } from '../../lib/admin/auth';
+import { db } from '../../lib/db';
+import { sendOutbox } from '../../lib/email/outbox';
+import { unwrap } from '../../lib/result';
+
+const guard = await requireAdmin(Astro);
+if (!guard.ok) return guard.response;
+
+if (guard.form) {
+  const id = String(guard.form.get('email') ?? '');
+  const step = String(guard.form.get('step') ?? '');
+  if (/^[0-9a-f-]{36}$/.test(id)) {
+    if (step === 'retry') {
+      unwrap(
+        await db()
+          .from('email_outbox')
+          .update({
+            status: 'queued',
+            next_attempt_at: new Date().toISOString(),
+            last_error: null,
+            first_sent_attempt_at: null,
+          })
+          .eq('id', id)
+          .in('status', ['failed', 'unknown'])
+          .select('id'),
+        'supabase',
+        'requeueing email',
+      );
+      await sendOutbox({ ids: [id] });
+    } else if (step === 'handled') {
+      unwrap(
+        await db()
+          .from('email_outbox')
+          .update({ status: 'sent', last_error: 'Marked as handled by an admin' })
+          .eq('id', id)
+          .select('id'),
+        'supabase',
+        'marking email handled',
+      );
+    }
+  }
+  return Astro.redirect(`/admin/email-outbox?done=${step}`, 303);
+}
+
+const rows = unwrap(
+  await db()
+    .from('email_outbox')
+    .select('id, kind, to_email, subject, status, attempts, last_error, updated_at')
+    .in('status', ['failed', 'unknown', 'queued'])
+    .order('updated_at', { ascending: false })
+    .limit(200),
+  'supabase',
+  'listing emails',
+) as Array<{
+  id: string;
+  kind: string;
+  to_email: string;
+  subject: string;
+  status: string;
+  attempts: number;
+  last_error: string | null;
+  updated_at: string;
+}>;
+const problems = rows.filter((r) => r.status !== 'queued');
+const waiting = rows.filter((r) => r.status === 'queued');
+const done = Astro.url.searchParams.get('done');
+---
+
+<AdminLayout title="Emails" admin={guard.admin} current="emails">
+  <div class="page-head">
+    <h1>Emails</h1>
+    <p class="lede">Emails that couldn't be sent, or might not have been, and emails waiting to go.</p>
+  </div>
+  {done && (
+    <div class="notice notice--success" role="status" tabindex="-1" data-focus-on-load>
+      <p>{done === 'retry' ? 'Tried sending it again.' : 'Marked as handled.'}</p>
+    </div>
+  )}
+  <h2>With problems ({problems.length})</h2>
+  {problems.length === 0 ? (
+    <p>No emails have problems.</p>
+  ) : (
+    <ul class="bare-list flow">
+      {problems.map((r) => (
+        <li class="notice notice--error flow-tight">
+          <h3 class="small">{r.subject}</h3>
+          <p>
+            To {r.to_email}.{' '}
+            {r.status === 'unknown'
+              ? 'We may or may not have sent it: sending was interrupted.'
+              : `Failed after ${r.attempts} ${r.attempts === 1 ? 'try' : 'tries'}.`}
+          </p>
+          {r.last_error && <p class="small">Error: {r.last_error}</p>}
+          <form method="post" class="button-row">
+            <input type="hidden" name="email" value={r.id} />
+            <button type="submit" name="step" value="retry">
+              Send again<span class="visually-hidden">: {r.subject}</span>
+            </button>
+            <button type="submit" name="step" value="handled" class="button--secondary">
+              Mark as handled<span class="visually-hidden">: {r.subject}</span>
+            </button>
+          </form>
+        </li>
+      ))}
+    </ul>
+  )}
+  <h2>Waiting to send ({waiting.length})</h2>
+  {waiting.length === 0 ? (
+    <p>Nothing is waiting.</p>
+  ) : (
+    <ul>
+      {waiting.map((r) => (
+        <li>
+          {r.subject}, to {r.to_email} ({r.attempts} {r.attempts === 1 ? 'try' : 'tries'} so far)
+        </li>
+      ))}
+    </ul>
+  )}
+</AdminLayout>
