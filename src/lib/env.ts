@@ -4,20 +4,21 @@ import { z } from 'zod';
  * Every environment variable the app reads, checked in one place.
  *
  * In production every variable is required. In development and test, local
- * defaults are used for anything that has a sensible local value (the local
- * Supabase stack, fake third-party services), so the app runs out of the box.
+ * defaults are used where there's a sensible local value, and third-party
+ * keys are optional (fake services stand in for them).
+ *
+ * No key or secret is ever written in this file, not even a local or
+ * placeholder one: secret scanners can't tell them apart from real ones.
+ * Local Supabase keys come from `pnpm env:local`, which copies them from
+ * `supabase status`.
  */
 
 export const APP_ENVS = ['development', 'test', 'production'] as const;
 export type AppEnv = (typeof APP_ENVS)[number];
 
 const LOCAL_SUPABASE_URL = 'http://127.0.0.1:54321';
-// These are the well-known demo keys that every local `supabase start` uses.
-const LOCAL_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
-const LOCAL_SERVICE_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
-const DEV_SECRET = 'dev-only-secret-change-me-dev-only-secret';
+// Not a secret: it only signs local development cookies and tokens.
+const DEV_SECRET = 'local-development-only-not-for-production';
 
 const secret = z.string().min(32, 'must be at least 32 characters');
 
@@ -45,14 +46,14 @@ const localSchema = z.object({
   APP_ENV: z.enum(['development', 'test']).default('development'),
   SITE_URL: z.url().default('http://localhost:4321'),
   SUPABASE_URL: z.url().default(LOCAL_SUPABASE_URL),
-  SUPABASE_ANON_KEY: z.string().default(LOCAL_ANON_KEY),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().default(LOCAL_SERVICE_KEY),
+  SUPABASE_ANON_KEY: z.string().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   APP_SECRET: secret.default(DEV_SECRET),
   CRON_SECRET: secret.default(DEV_SECRET),
   STRIPE_SECRET_KEY: z.string().optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().default('whsec_test_secret'),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
-  RESEND_WEBHOOK_SECRET: z.string().default('whsec_dGVzdC1yZXNlbmQtc2VjcmV0'),
+  RESEND_WEBHOOK_SECRET: z.string().optional(),
   EMAIL_FROM: z.string().default('calenda11y <hello@calenda11y.org>'),
   TURNSTILE_SITE_KEY: z.string().optional(),
   TURNSTILE_SECRET_KEY: z.string().optional(),
@@ -91,6 +92,18 @@ let cached: Env | undefined;
 export function env(): Env {
   cached ??= parseEnv(process.env);
   return cached;
+}
+
+/**
+ * A value that's optional locally but needed for the feature being used.
+ * Throws a message that says how to fix it.
+ */
+export function requireEnv<K extends keyof Env>(key: K, hint: string): NonNullable<Env[K]> {
+  const value = env()[key];
+  if (value === undefined || value === null || value === '') {
+    throw new EnvError([`${String(key)} is not set. ${hint}`]);
+  }
+  return value as NonNullable<Env[K]>;
 }
 
 /** Only for tests. */

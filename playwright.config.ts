@@ -1,4 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
+import { ensureLocalSupabaseEnv } from './scripts/local-supabase.ts';
+
+// End-to-end tests run against the local Supabase stack.
+ensureLocalSupabaseEnv();
 
 const PORT = Number(process.env.E2E_PORT ?? 4322);
 
@@ -20,7 +24,15 @@ export default defineConfig({
     command: 'node dist/server/entry.mjs',
     url: `http://127.0.0.1:${PORT}/settings`,
     reuseExistingServer: !process.env.CI,
-    env: { APP_ENV: 'test', HOST: '127.0.0.1', PORT: String(PORT), SITE_URL: `http://127.0.0.1:${PORT}` },
+    env: {
+      APP_ENV: 'test',
+      HOST: '127.0.0.1',
+      PORT: String(PORT),
+      SITE_URL: `http://127.0.0.1:${PORT}`,
+      SUPABASE_URL: process.env.SUPABASE_URL!,
+      SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY!,
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    },
     timeout: 30_000,
   },
 });

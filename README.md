@@ -21,8 +21,8 @@ Needs Node 24 (see `.nvmrc`), pnpm and Docker.
 ```sh
 nvm use
 pnpm install
-cp .env.example .env          # local defaults work for everything except third-party keys
 pnpm exec supabase start      # local Postgres, Auth and Storage in Docker
+pnpm env:local                # writes the local Supabase URL and keys into .env
 pnpm exec supabase db reset   # apply migrations and seed data
 pnpm dev                      # http://localhost:4321
 ```
