@@ -6,7 +6,9 @@
  */
 import type { FieldErrors } from '../forms/errors.ts';
 import {
+  ACCESS_LABELS,
   ACCESS_PROVISIONS,
+  FORMAT_LABELS,
   FORMATS,
   PRICES,
   countryName,
@@ -34,6 +36,8 @@ export interface Filters {
   q?: string;
   /** 'any' is only used internally (the month grid shows past days too). */
   when: 'upcoming' | 'past' | 'any';
+  /** Internal: only events that ended after this instant (used by feeds). */
+  since?: string;
   page: number;
 }
 
@@ -195,6 +199,7 @@ export function applyFilters<Q extends FilterableQuery>(query: Q, filters: Filte
 
   if (filters.when === 'past') q = q.lt('end_instant', now);
   else if (filters.when === 'upcoming') q = q.gt('end_instant', now);
+  if (filters.since) q = q.gt('end_instant', filters.since);
 
   const window = dateWindow(filters, today);
   // Overlap: the event's last day is on or after `from`, and its first day is on or before `to`.
@@ -225,4 +230,25 @@ export function filtersToParams(
   const page = overrides.page ?? filters.page;
   if (overrides.includePage !== false && page > 1) p.set('page', String(page));
   return p;
+}
+
+/** A plain-language description of the filters, e.g. "online events with live captions". */
+export function describeFilters(filters: Filters): string {
+  const parts: string[] = [];
+  const formats = filters.formats.map((f) => FORMAT_LABELS[f].toLowerCase());
+  const subject = filters.price ? `${filters.price} events` : 'events';
+  let text = formats.length ? `${formats.join(' or ')} ${subject}` : subject;
+  if (filters.country === ONLINE) text = `${text} you can join online`;
+  else if (filters.country) text = `${text} in ${countryName(filters.country)}`;
+  parts.push(text);
+  if (filters.access.length)
+    parts.push(`with ${filters.access.map((a) => ACCESS_LABELS[a].toLowerCase()).join(' and ')}`);
+  if (filters.q) parts.push(`matching “${filters.q}”`);
+  const window =
+    filters.range === 'custom'
+      ? [filters.from && `from ${filters.from}`, filters.to && `to ${filters.to}`].filter(Boolean).join(' ')
+      : '';
+  if (window) parts.push(window);
+  const result = parts.join(' ');
+  return result === 'events' ? 'all events' : result;
 }

@@ -172,3 +172,27 @@ describe('filtersToParams', () => {
     expect(filtersToParams(f, { page: 4 }).toString()).toBe('country=GB&page=4');
   });
 });
+
+import { describeFilters } from '../../src/lib/events/predicates.ts';
+
+describe('describeFilters', () => {
+  it.each([
+    ['', 'all events'],
+    ['country=PT', 'events in Portugal'],
+    ['country=online', 'events you can join online'],
+    ['format=hybrid&price=free', 'in person and online free events'],
+    ['access=captions&access=quiet_room', 'events with live captions and quiet room'],
+    ['q=pdf&from=2027-01-01', 'events matching “pdf” from 2027-01-01'],
+  ])('describes "%s" as "%s"', (qs, text) => {
+    expect(describeFilters(parse(qs).filters)).toBe(text);
+  });
+});
+
+describe('since', () => {
+  it('adds a lower bound on the end time', () => {
+    const f = { ...parse('').filters, when: 'any' as const, since: '2026-10-01T00:00:00.000Z' };
+    expect(applyFilters(new Recorder(), f, NOW, TODAY).calls).toEqual([
+      ['gt', 'end_instant', '2026-10-01T00:00:00.000Z'],
+    ]);
+  });
+});

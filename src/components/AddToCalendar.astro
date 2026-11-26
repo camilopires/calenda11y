@@ -1,13 +1,56 @@
 ---
-// Filled in by milestone 3 (calendar links and .ics downloads).
-import type { PublicEvent } from '../lib/events/model';
+import { googleCalendarUrl, office365Url, outlookComUrl } from '../lib/calendar/links';
+import { env } from '../lib/env';
+import { countryName, type PublicEvent } from '../lib/events/model';
 
 interface Props {
   event: PublicEvent;
 }
 const { event } = Astro.props;
+const site = env().SITE_URL;
+const links = [
+  {
+    href: `/events/${event.slug}.ics`,
+    label: 'Download a calendar file',
+    hint: 'For Apple Calendar and most other apps.',
+    download: true,
+  },
+  { href: googleCalendarUrl(event, site), label: 'Add to Google Calendar', hint: undefined, download: false },
+  {
+    href: outlookComUrl(event, site),
+    label: 'Add to Outlook.com',
+    hint: 'For personal Microsoft accounts.',
+    download: false,
+  },
+  {
+    href: office365Url(event, site),
+    label: 'Add to Microsoft 365',
+    hint: 'For work and school accounts.',
+    download: false,
+  },
+];
+const country = event.country_code;
 ---
 
-<section aria-labelledby="add-to-calendar" class="flow" data-event={event.id}>
+<section aria-labelledby="add-to-calendar" class="flow">
   <h2 id="add-to-calendar">Add to your calendar</h2>
+  <ul class="calendar-links bare-list">
+    {links.map((l) => (
+      <li>
+        <a class="link-standalone" href={l.href} download={l.download ? `${event.slug}.ics` : undefined}>
+          {l.label}
+          <span class="visually-hidden">: {event.title}</span>
+        </a>
+        {l.hint && <span class="hint"> {l.hint}</span>}
+      </li>
+    ))}
+  </ul>
+  <p>
+    {country ? (
+      <a href={`/subscribe?country=${country}`}>Subscribe to all events in {countryName(country)}</a>
+    ) : (
+      <a href="/subscribe?country=online">Subscribe to all online events</a>
+    )}
+    , so new ones appear in your calendar on their own.
+  </p>
 </section>

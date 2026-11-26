@@ -1,0 +1,97 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ErrorSummary from '../../components/ErrorSummary.astro';
+import { webcalUrl } from '../../lib/calendar/links';
+import { env } from '../../lib/env';
+import { describeFilters, filtersToParams } from '../../lib/events/predicates';
+import { parseFeedFilters } from '../../lib/calendar/feeds';
+import { countryCounts } from '../../lib/events/query';
+import { countryName } from '../../lib/events/model';
+
+const { filters, errors } = parseFeedFilters(Astro.url.searchParams);
+const qs = filtersToParams(filters, { includePage: false }).toString();
+const site = env().SITE_URL;
+const feedPath = qs ? `/feeds/events.ics?${qs}` : '/feeds/all.ics';
+const feedUrl = new URL(feedPath, site).href;
+const rssUrl = new URL(qs ? `/feeds/events.rss?${qs}` : '/feeds/events.rss', site).href;
+const description = describeFilters(filters);
+const topCountries = (await countryCounts()).sort((a, b) => b.upcoming - a.upcoming).slice(0, 8);
+---
+
+<BaseLayout title="Subscribe to events" nav="subscribe" crumbLabel="Subscribe">
+  <div class="page-head">
+    <h1>Subscribe to events</h1>
+    <p class="lede">Get new accessibility events in your calendar app, a feed reader, or your inbox.</p>
+  </div>
+
+  <ErrorSummary errors={errors} />
+
+  <section aria-labelledby="calendar-sub" class="flow">
+    <h2 id="calendar-sub">In your calendar app</h2>
+    <p>
+      You're subscribing to <strong>{description}</strong>. Your calendar app checks for changes a few times a day, so
+      new events appear and changed or cancelled ones update on their own.
+    </p>
+    <p>
+      <a class="button" href={webcalUrl(feedUrl)}>
+        Subscribe in my calendar app
+      </a>
+    </p>
+    <div class="field">
+      <label for="feed-url">Calendar feed address</label>
+      <p class="hint" id="feed-url-hint">
+        Copy this if your calendar app asks for a web address (URL).
+      </p>
+      <input id="feed-url" type="url" readonly value={feedUrl} aria-describedby="feed-url-hint" />
+    </div>
+
+    <h3>Google Calendar</h3>
+    <ol>
+      <li>Copy the calendar feed address above.</li>
+      <li>
+        On a computer, open Google Calendar. Next to "Other calendars", choose "Add other calendars", then "From URL".
+      </li>
+      <li>Paste the address and choose "Add calendar".</li>
+    </ol>
+    <h3>Outlook</h3>
+    <ol>
+      <li>Copy the calendar feed address above.</li>
+      <li>In Outlook on the web, go to Calendar, choose "Add calendar", then "Subscribe from web".</li>
+      <li>Paste the address, give the calendar a name, and choose "Import".</li>
+    </ol>
+    <h3>Apple Calendar</h3>
+    <ol>
+      <li>Choose "Subscribe in my calendar app" above. Calendar opens and asks you to confirm.</li>
+      <li>On an iPhone or iPad, choose "Subscribe" when asked.</li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="choose" class="flow">
+    <h2 id="choose">Choose different events</h2>
+    <p>
+      <a href={qs ? `/?${qs}` : '/'}>Filter the list of events</a>, then choose "Subscribe to these events". Or pick one
+      of these:
+    </p>
+    <ul>
+      <li>
+        <a href="/subscribe">All events</a>
+      </li>
+      <li>
+        <a href="/subscribe?country=online">Events you can join online</a>
+      </li>
+      {topCountries.map((c) => (
+        <li>
+          <a href={`/subscribe?country=${c.country_code}`}>Events in {countryName(c.country_code)}</a>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section aria-labelledby="rss" class="flow">
+    <h2 id="rss">In a feed reader</h2>
+    <p>
+      Add this <abbr title="Really Simple Syndication">RSS</abbr> feed to your feed reader:
+      <a href={rssUrl}>RSS feed of {description}</a>.
+    </p>
+  </section>
+</BaseLayout>
