@@ -2,3 +2,4 @@ dist
 .astro
 pnpm-lock.yaml
 supabase/.temp
+supabase/config.jsonc

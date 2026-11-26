@@ -40,7 +40,16 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Start Supabase
-        run: pnpm exec supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
+        # Image registries sometimes rate-limit pulls. A failed start can leave
+        # containers holding the ports, so stop cleanly before each retry.
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm exec supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor; then exit 0; fi
+            echo "Supabase start failed (attempt $attempt), retrying"
+            pnpm exec supabase stop --no-backup || true
+            sleep $((attempt * 20))
+          done
+          exit 1
       - name: Reset database with seed data
         run: pnpm exec supabase db reset
       - run: pnpm test:integration
