@@ -1,0 +1,60 @@
+{
+  "name": "calenda11y",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "An accessibility events calendar for the world",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "packageManager": "pnpm@11.1.3",
+  "scripts": {
+    "dev": "astro dev",
+    "prebuild": "node --env-file-if-exists=.env scripts/check-env.ts",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:e2e": "playwright test",
+    "test:stripe-contract": "vitest run --project contract",
+    "readability": "node --env-file-if-exists=.env scripts/readability.ts"
+  },
+  "dependencies": {
+    "@astrojs/node": "11.1.14",
+    "@astrojs/vercel": "11.0.22",
+    "@fontsource/atkinson-hyperlegible-next": "5.3.0",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.119.2",
+    "astro": "7.4.13",
+    "fast-xml-parser": "5.12.1",
+    "ical.js": "2.2.1",
+    "resend": "6.40.0",
+    "sanitize-html": "2.18.2",
+    "sharp": "0.35.5",
+    "stripe": "23.2.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.12",
+    "@axe-core/playwright": "4.14.1",
+    "@playwright/test": "1.65.1",
+    "@types/node": "26.6.10",
+    "@types/pngjs": "6.0.5",
+    "@types/sanitize-html": "2.16.2",
+    "eslint": "10.15.0",
+    "eslint-plugin-astro": "3.2.1",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "html-validate": "11.22.1",
+    "pngjs": "7.0.0",
+    "prettier": "3.10.1",
+    "prettier-plugin-astro": "1.1.2",
+    "supabase": "3.4.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.74.0",
+    "vitest": "5.1.2"
+  }
+}

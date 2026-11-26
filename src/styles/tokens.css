@@ -1,0 +1,137 @@
+/*
+ * calenda11y design tokens: the single source of colour, type, spacing and
+ * focus values. tests/unit/tokens.test.ts parses this file and checks every
+ * text pair reaches 7:1 (WCAG 1.4.6) and every UI pair 3:1 (1.4.11), in
+ * every theme.
+ *
+ * Format the test relies on:
+ *   - Colour tokens are `--c-*` and hold hex values.
+ *   - In the default block, `light-dark(<light>, <dark>)` gives both themes.
+ *   - High-contrast themes are `[data-theme='hc-…']` blocks of plain hex values.
+ *
+ * Palette, taken from accessible wayfinding signage: paper, ink navy,
+ * signal blue, signage yellow.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* theme:light+dark */
+  --c-bg: light-dark(#f6f8fb, #0d1730);
+  --c-surface: light-dark(#ffffff, #15213f);
+  --c-text: light-dark(#0f1b3d, #f2f5fa);
+  --c-text-muted: light-dark(#3a4560, #c3ccdd);
+  --c-link: light-dark(#123f9c, #a9c8ff);
+  --c-link-visited: light-dark(#5b2a86, #d7b8f5);
+  --c-border: light-dark(#6b7590, #8c97b0);
+  --c-rule: light-dark(#6b7590, #8c97b0);
+  --c-accent: light-dark(#0f1b3d, #ffd43b);
+  --c-on-accent: light-dark(#ffffff, #0d1730);
+  --c-highlight: light-dark(#ffd43b, #ffd43b);
+  --c-on-highlight: light-dark(#0f1b3d, #0d1730);
+  --c-focus-ring: light-dark(#0f1b3d, #ffd43b);
+  --c-error: light-dark(#a3141a, #ffb4ab);
+  --c-success: light-dark(#1b5e20, #9ee2a6);
+  /* /theme */
+
+  /* Type: Atkinson Hyperlegible Next, designed by the Braille Institute for low vision. */
+  --font-body: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --font-size-base: 1.125rem;
+  --line-height: 1.5;
+  --paragraph-gap: calc(var(--line-height) * 1.5em);
+  --measure: 70ch;
+  --measure-cjk: 40ch;
+
+  /* A modular scale (ratio 1.25) */
+  --step--1: 0.9rem;
+  --step-0: 1.125rem;
+  --step-1: 1.406rem;
+  --step-2: 1.758rem;
+  --step-3: 2.197rem;
+  --step-4: 2.747rem;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4.5rem;
+
+  --target-min: 44px;
+  --radius: 4px;
+  --focus-width: 3px;
+  --focus-offset: 2px;
+  --border-width: 2px;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+/* theme:hc-dark */
+:root[data-theme='hc-dark'] {
+  color-scheme: dark;
+  --c-bg: #000000;
+  --c-surface: #000000;
+  --c-text: #ffffff;
+  --c-text-muted: #ffffff;
+  --c-link: #ffff00;
+  --c-link-visited: #ffb3ff;
+  --c-border: #ffffff;
+  --c-rule: #ffffff;
+  --c-accent: #ffff00;
+  --c-on-accent: #000000;
+  --c-highlight: #ffff00;
+  --c-on-highlight: #000000;
+  --c-focus-ring: #ffff00;
+  --c-error: #ff9e9e;
+  --c-success: #8cff9e;
+}
+/* /theme */
+
+/* theme:hc-light */
+:root[data-theme='hc-light'] {
+  color-scheme: light;
+  --c-bg: #fffbe6;
+  --c-surface: #fffbe6;
+  --c-text: #000000;
+  --c-text-muted: #000000;
+  --c-link: #00007a;
+  --c-link-visited: #4b0063;
+  --c-border: #000000;
+  --c-rule: #000000;
+  --c-accent: #000000;
+  --c-on-accent: #fffbe6;
+  --c-highlight: #000000;
+  --c-on-highlight: #fffbe6;
+  --c-focus-ring: #000000;
+  --c-error: #7a0000;
+  --c-success: #004d00;
+}
+/* /theme */
+
+/* Display settings (src/pages/settings.astro) */
+:root[data-text-size='125'] {
+  font-size: 125%;
+}
+:root[data-text-size='150'] {
+  font-size: 150%;
+}
+:root[data-text-size='175'] {
+  font-size: 175%;
+}
+:root[data-text-size='200'] {
+  font-size: 200%;
+}
+:root[data-spacing='wide'] {
+  --line-height: 1.8;
+  --paragraph-gap: calc(var(--line-height) * 2em);
+  letter-spacing: 0.12em;
+  word-spacing: 0.16em;
+}

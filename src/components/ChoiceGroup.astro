@@ -1,0 +1,82 @@
+---
+import { fieldId } from '../lib/forms/errors';
+
+type Option = { value: string; label: string; hint?: string };
+interface Props {
+  name: string;
+  legend: string;
+  type: 'checkbox' | 'radio';
+  options: Option[];
+  /** Selected values. */
+  value?: string[] | string | undefined;
+  hint?: string;
+  error?: string | undefined;
+  required?: boolean;
+  inline?: boolean;
+  /** Render the legend as a heading-sized label. */
+  legendSize?: 'large' | 'normal';
+}
+const {
+  name,
+  legend,
+  type,
+  options,
+  value,
+  hint,
+  error,
+  required = false,
+  inline = false,
+  legendSize = 'normal',
+} = Astro.props;
+const selected = new Set(Array.isArray(value) ? value : value ? [value] : []);
+const id = fieldId(name);
+const hintId = hint ? `${id}-hint` : undefined;
+const errorId = error ? `${id}-error` : undefined;
+const describedBy = [errorId, hintId].filter(Boolean).join(' ') || undefined;
+---
+
+<fieldset class:list={['field', { 'field--error': error }]} aria-describedby={describedBy} id={`${id}-group`}>
+  <legend class:list={[{ label: legendSize === 'normal' }]}>
+    {legend}
+    {!required && type === 'checkbox' && <span class="optional"> (optional)</span>}
+  </legend>
+  {hint && (
+    <p class="hint" id={hintId}>
+      {hint}
+    </p>
+  )}
+  {error && (
+    <p class="field-error" id={errorId}>
+      <span class="visually-hidden">Error: </span>
+      {error}
+    </p>
+  )}
+  <div class:list={['choices', { 'choices--inline': inline }]}>
+    {options.map((o, i) => {
+      const optId = i === 0 ? id : `${id}-${o.value}`;
+      const optHint = o.hint ? `${optId}-hint` : undefined;
+      return (
+        <div class="choice">
+          <input
+            type={type}
+            id={optId}
+            name={name}
+            value={o.value}
+            checked={selected.has(o.value)}
+            required={type === 'radio' && required ? true : undefined}
+            aria-describedby={optHint}
+          />
+          <label for={optId}>
+            {o.label}
+            {o.hint && (
+              <span class="hint" id={optHint}>
+                <br />
+                {o.hint}
+              </span>
+            )}
+          </label>
+        </div>
+      );
+    })}
+  </div>
+</fieldset>

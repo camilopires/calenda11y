@@ -1,0 +1,119 @@
+---
+import '@fontsource/atkinson-hyperlegible-next/latin-400.css';
+import '@fontsource/atkinson-hyperlegible-next/latin-400-italic.css';
+import '@fontsource/atkinson-hyperlegible-next/latin-600.css';
+import '@fontsource/atkinson-hyperlegible-next/latin-700.css';
+import '@fontsource/atkinson-hyperlegible-next/latin-800.css';
+import '../styles/tokens.css';
+import '../styles/base.css';
+import { displayAttributes } from '../lib/display';
+import { LANG, t } from '../i18n/t';
+import SiteFooter from '../components/SiteFooter.astro';
+
+export type NavKey = 'events' | 'calendar' | 'submit' | 'subscribe' | 'sponsor' | 'about' | 'admin' | 'none';
+export interface Crumb {
+  href: string;
+  label: string;
+}
+
+interface Props {
+  /** The page's own title; " | calenda11y" is added after it. */
+  title: string;
+  description?: string;
+  /** Pages between Home and this page. This page is added automatically. */
+  breadcrumbs?: Crumb[];
+  /** Label for this page in the breadcrumb trail, if different from the title. */
+  crumbLabel?: string;
+  nav?: NavKey;
+  noindex?: boolean;
+  /** Home has no breadcrumb trail. */
+  isHome?: boolean;
+  canonical?: string;
+}
+
+const {
+  title,
+  description = t('site.description'),
+  breadcrumbs = [],
+  crumbLabel,
+  nav = 'none',
+  noindex = false,
+  isHome = false,
+  canonical,
+} = Astro.props;
+
+const attrs = displayAttributes(Astro.locals.display);
+const fullTitle = isHome ? `${t('site.name')}: ${t('site.tagline')}` : `${title} | ${t('site.name')}`;
+
+const navItems: Array<{ key: NavKey; href: string; label: string }> = [
+  { key: 'events', href: '/', label: t('nav.events') },
+  { key: 'calendar', href: '/calendar', label: t('nav.calendar') },
+  { key: 'submit', href: '/submit', label: t('nav.submit') },
+  { key: 'subscribe', href: '/subscribe', label: t('nav.subscribe') },
+  { key: 'sponsor', href: '/sponsor', label: t('nav.sponsor') },
+  { key: 'about', href: '/about', label: t('nav.about') },
+];
+const path = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang={LANG} {...attrs}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex" />}
+    {canonical && <link rel="canonical" href={new URL(canonical, Astro.site).href} />}
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="alternate" type="text/calendar" title="All calenda11y events (iCalendar)" href="/feeds/all.ics" />
+    <link rel="alternate" type="application/rss+xml" title="calenda11y events (RSS)" href="/feeds/events.rss" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">
+      {t('skip.main')}
+    </a>
+    <header class="site-header">
+      <div class="wrap site-header__inner">
+        <a class="wordmark" href="/" aria-current={path === '/' ? 'page' : undefined}>
+          <span class="wordmark__mark" aria-hidden="true">
+            a11y
+          </span>
+          <span>calenda11y</span>
+        </a>
+        <nav class="site-nav" aria-label={t('nav.label')}>
+          <ul>
+            {navItems.map((item) => (
+              <li>
+                <a href={item.href} aria-current={item.key === nav ? 'page' : undefined}>
+                  {item.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </div>
+    </header>
+    {!isHome && (
+      <nav class="breadcrumbs wrap" aria-label={t('breadcrumbs.label')}>
+        <ol>
+          <li>
+            <a href="/">{t('breadcrumbs.home')}</a>
+          </li>
+          {breadcrumbs.map((c) => (
+            <li>
+              <a href={c.href}>{c.label}</a>
+            </li>
+          ))}
+          <li>
+            <span aria-current="page">{crumbLabel ?? title}</span>
+          </li>
+        </ol>
+      </nav>
+    )}
+    <main id="main" class="wrap" tabindex="-1">
+      <slot />
+    </main>
+    <SiteFooter />
+  </body>
+</html>

@@ -1,0 +1,102 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ChoiceGroup from '../components/ChoiceGroup.astro';
+import {
+  DISPLAY_COOKIE,
+  SPACINGS,
+  TEXT_SIZES,
+  THEMES,
+  parseDisplay,
+  serializeDisplay,
+  type DisplaySettings,
+} from '../lib/display';
+import { env } from '../lib/env';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const raw = new URLSearchParams({
+    theme: String(form.get('theme') ?? ''),
+    size: String(form.get('size') ?? ''),
+    spacing: String(form.get('spacing') ?? ''),
+  }).toString();
+  const settings: DisplaySettings = parseDisplay(raw);
+  Astro.cookies.set(DISPLAY_COOKIE, serializeDisplay(settings), {
+    path: '/',
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: 'lax',
+    secure: env().APP_ENV === 'production',
+    httpOnly: true,
+  });
+  return Astro.redirect('/settings?saved=1', 303);
+}
+
+const s = Astro.locals.display;
+const saved = Astro.url.searchParams.get('saved') === '1';
+const themeLabels: Record<(typeof THEMES)[number], { label: string; hint: string }> = {
+  system: { label: 'Match my device', hint: 'Light or dark, following your device setting.' },
+  light: { label: 'Light', hint: 'Dark blue text on a pale background.' },
+  dark: { label: 'Dark', hint: 'Pale text on a dark blue background.' },
+  'hc-dark': { label: 'High contrast, dark', hint: 'White and yellow text on black.' },
+  'hc-light': { label: 'High contrast, light', hint: 'Black text on a cream background.' },
+};
+---
+
+<BaseLayout title="Display settings" description="Change the colours, text size and spacing of calenda11y.">
+  <div class="page-head">
+    <h1>Display settings</h1>
+    <p class="lede">Change how calenda11y looks on this device. Your choices are saved in a cookie.</p>
+  </div>
+
+  {saved && (
+    <div class="notice notice--success" role="status" tabindex="-1" data-focus-on-load>
+      <p>Your display settings are saved.</p>
+    </div>
+  )}
+
+  <form method="post" action="/settings" class="flow">
+    <ChoiceGroup
+      name="theme"
+      legend="Colours"
+      type="radio"
+      required
+      value={s.theme}
+      options={THEMES.map((v) => ({ value: v, ...themeLabels[v] }))}
+    />
+    <ChoiceGroup
+      name="size"
+      legend="Text size"
+      type="radio"
+      required
+      inline
+      value={s.textSize}
+      options={TEXT_SIZES.map((v) => ({ value: v, label: `${v}%` }))}
+    />
+    <ChoiceGroup
+      name="spacing"
+      legend="Spacing"
+      type="radio"
+      required
+      value={s.spacing}
+      options={SPACINGS.map((v) =>
+        v === 'normal'
+          ? { value: v, label: 'Normal' }
+          : { value: v, label: 'Wide', hint: 'More space between lines, letters and words.' },
+      )}
+    />
+    <div class="button-row">
+      <button type="submit">Save display settings</button>
+    </div>
+  </form>
+
+  <section aria-labelledby="more" class="flow">
+    <h2 id="more">Other ways to change how the site looks</h2>
+    <p>
+      calenda11y also follows your browser and system settings, such as zoom, minimum font size, custom colours and
+      Windows contrast themes.
+    </p>
+  </section>
+</BaseLayout>
+
+<script>
+  document.querySelector<HTMLElement>('[data-focus-on-load]')?.focus();
+</script>

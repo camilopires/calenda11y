@@ -1,0 +1,11 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { t } from '../i18n/t';
+---
+
+<BaseLayout title={t('site.tagline')} nav="events" isHome>
+  <div class="page-head">
+    <h1>{t('site.tagline')}</h1>
+    <p class="lede">Conferences, meetups and workshops about digital accessibility.</p>
+  </div>
+</BaseLayout>

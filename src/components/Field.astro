@@ -1,0 +1,108 @@
+---
+import { fieldId } from '../lib/forms/errors';
+
+type Option = { value: string; label: string };
+interface Props {
+  name: string;
+  label: string;
+  type?:
+    | 'text'
+    | 'email'
+    | 'url'
+    | 'date'
+    | 'time'
+    | 'datetime-local'
+    | 'search'
+    | 'number'
+    | 'textarea'
+    | 'select'
+    | 'file';
+  value?: string | undefined;
+  hint?: string;
+  error?: string | undefined;
+  required?: boolean;
+  options?: Option[];
+  autocomplete?: string;
+  inputmode?: 'text' | 'email' | 'url' | 'numeric' | 'search';
+  maxlength?: number;
+  rows?: number;
+  accept?: string;
+  min?: string;
+  max?: string;
+  /** Markup for "(optional)" is added when the field isn't required. */
+  showOptional?: boolean;
+  lang?: string | undefined;
+}
+const {
+  name,
+  label,
+  type = 'text',
+  value = '',
+  hint,
+  error,
+  required = false,
+  options = [],
+  autocomplete,
+  inputmode,
+  maxlength,
+  rows = 6,
+  accept,
+  min,
+  max,
+  showOptional = true,
+  lang,
+} = Astro.props;
+const id = fieldId(name);
+const hintId = hint ? `${id}-hint` : undefined;
+const errorId = error ? `${id}-error` : undefined;
+const describedBy = [errorId, hintId].filter(Boolean).join(' ') || undefined;
+const common = {
+  id,
+  name,
+  required,
+  'aria-describedby': describedBy,
+  'aria-invalid': error ? ('true' as const) : undefined,
+  autocomplete,
+};
+---
+
+<div class:list={['field', { 'field--error': error }]}>
+  <label for={id}>
+    {label}
+    {!required && showOptional && <span class="optional"> (optional)</span>}
+  </label>
+  {hint && (
+    <p class="hint" id={hintId}>
+      {hint}
+    </p>
+  )}
+  {error && (
+    <p class="field-error" id={errorId}>
+      <span class="visually-hidden">Error: </span>
+      {error}
+    </p>
+  )}
+  {type === 'textarea' ? (
+    <textarea {...common} rows={rows} maxlength={maxlength} lang={lang}>{value}</textarea>
+  ) : type === 'select' ? (
+    <select {...common}>
+      {options.map((o) => (
+        <option value={o.value} selected={o.value === value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  ) : (
+    <input
+      {...common}
+      type={type}
+      value={type === 'file' ? undefined : value}
+      inputmode={inputmode}
+      maxlength={maxlength}
+      accept={accept}
+      min={min}
+      max={max}
+      lang={lang}
+    />
+  )}
+</div>

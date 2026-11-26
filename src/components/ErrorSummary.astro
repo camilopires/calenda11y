@@ -1,0 +1,45 @@
+---
+import { t } from '../i18n/t';
+import { fieldId, type FieldErrors } from '../lib/forms/errors';
+
+interface Props {
+  errors: FieldErrors;
+  /** Errors not tied to one field. */
+  general?: string[];
+  /** Override where a field's link points (e.g. the first checkbox in a group). */
+  targets?: Record<string, string>;
+}
+const { errors, general = [], targets = {} } = Astro.props;
+const entries = Object.entries(errors);
+const show = entries.length > 0 || general.length > 0;
+---
+
+{show && (
+  <div
+    class="notice notice--error error-summary"
+    role="alert"
+    aria-labelledby="error-summary-title"
+    tabindex="-1"
+    data-focus-on-load
+  >
+    <h2 id="error-summary-title">{t('error.summary.title')}</h2>
+    <ul>
+      {general.map((g) => (
+        <li>{g}</li>
+      ))}
+      {entries.map(([name, message]) => (
+        <li>
+          <a href={`#${targets[name] ?? fieldId(name)}`}>{message}</a>
+        </li>
+      ))}
+    </ul>
+  </div>
+)}
+
+<script>
+  // Moves focus to the error summary (or any [data-focus-on-load]) when the
+  // page loads, so keyboard and screen reader users land on it. Without
+  // JavaScript the summary is still the first thing in <main>.
+  const target = document.querySelector<HTMLElement>('[data-focus-on-load]');
+  target?.focus();
+</script>

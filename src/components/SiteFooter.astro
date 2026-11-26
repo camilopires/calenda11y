@@ -1,0 +1,77 @@
+---
+import { t } from '../i18n/t';
+
+interface Props {
+  sponsorNames?: Array<{ name: string; url: string | null }>;
+}
+const { sponsorNames = [] } = Astro.props;
+---
+
+<footer class="site-footer">
+  <div class="wrap site-footer__grid">
+    <div class="flow-tight">
+      <p>
+        <strong>calenda11y</strong>
+      </p>
+      <p>{t('footer.about')}</p>
+      <p class="small muted">{t('footer.licence')}</p>
+      {sponsorNames.length > 0 && (
+        <>
+          <h2 class="small">{t('footer.sponsors')}</h2>
+          <p class="small">
+            {sponsorNames.map((s, i) => (
+              <>
+                {i > 0 && ', '}
+                {s.url ? <a href={s.url}>{s.name}</a> : s.name}
+              </>
+            ))}
+          </p>
+        </>
+      )}
+    </div>
+    <nav aria-labelledby="footer-site">
+      <h2 id="footer-site" class="small">
+        {t('footer.site')}
+      </h2>
+      <ul>
+        <li>
+          <a href="/">{t('nav.events')}</a>
+        </li>
+        <li>
+          <a href="/calendar">{t('nav.calendar')}</a>
+        </li>
+        <li>
+          <a href="/submit">{t('nav.submit')}</a>
+        </li>
+        <li>
+          <a href="/subscribe">{t('nav.subscribe')}</a>
+        </li>
+        <li>
+          <a href="/sponsor">{t('nav.sponsor')}</a>
+        </li>
+      </ul>
+    </nav>
+    <nav aria-labelledby="footer-help">
+      <h2 id="footer-help" class="small">
+        {t('footer.help')}
+      </h2>
+      <ul>
+        <li>
+          <a href="/about">{t('nav.about')}</a>
+        </li>
+        <li>
+          <a href="/accessibility">{t('footer.accessibility')}</a>
+        </li>
+        <li>
+          <a href="/privacy">{t('footer.privacy')}</a>
+        </li>
+        <li>
+          <a href="/glossary">{t('footer.glossary')}</a>
+        </li>
+        <li>
+          <a href="/settings">{t('footer.settings')}</a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+</footer>

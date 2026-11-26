@@ -1,0 +1,90 @@
+---
+// A page showing every base component, used by the accessibility tests.
+// Not available in production.
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Field from '../components/Field.astro';
+import ChoiceGroup from '../components/ChoiceGroup.astro';
+import ErrorSummary from '../components/ErrorSummary.astro';
+import { env } from '../lib/env';
+
+if (env().APP_ENV === 'production') return new Response(null, { status: 404 });
+const withErrors = Astro.url.searchParams.get('errors') === '1';
+const errors = withErrors
+  ? { title: 'Enter the event name', email: 'Enter an email address in the right format, like name@example.com' }
+  : {};
+---
+
+<BaseLayout title="Styleguide" noindex>
+  <div class="page-head">
+    <h1>Styleguide</h1>
+    <p class="lede">Every base component in one place.</p>
+  </div>
+  <ErrorSummary errors={errors} />
+  <section aria-labelledby="sg-text" class="flow">
+    <h2 id="sg-text">Text</h2>
+    <p>
+      Body text with a <a href="/about">link to the about page</a> and an <abbr title="accessibility">a11y</abbr>{' '}
+      abbreviation.
+    </p>
+    <p class="muted">Muted text for less important details.</p>
+  </section>
+  <section aria-labelledby="sg-buttons" class="flow">
+    <h2 id="sg-buttons">Buttons</h2>
+    <div class="button-row">
+      <button type="button">Primary action</button>
+      <button type="button" class="button--secondary">
+        Secondary action
+      </button>
+      <a class="button" href="/submit">
+        Add an event
+      </a>
+    </div>
+  </section>
+  <section aria-labelledby="sg-form">
+    <h2 id="sg-form">Form</h2>
+    <form method="get" action="/styleguide" class="flow">
+      <Field
+        name="title"
+        label="Event name"
+        hint="The name people will see in the list."
+        required
+        error={errors.title}
+      />
+      <Field name="email" label="Email address" type="email" autocomplete="email" required error={errors.email} />
+      <Field name="notes" label="Notes" type="textarea" />
+      <Field
+        name="format"
+        label="Format"
+        type="select"
+        options={[
+          { value: '', label: 'Any format' },
+          { value: 'online', label: 'Online' },
+        ]}
+      />
+      <ChoiceGroup
+        name="access"
+        legend="Access provisions"
+        type="checkbox"
+        options={[
+          { value: 'captions', label: 'Live captions' },
+          { value: 'sign_language', label: 'Sign language interpretation' },
+        ]}
+      />
+      <button type="submit">Check form</button>
+    </form>
+  </section>
+  <section aria-labelledby="sg-notices" class="flow">
+    <h2 id="sg-notices">Notices</h2>
+    <div class="notice notice--important">
+      <p>This event has been cancelled.</p>
+    </div>
+    <div class="notice notice--success">
+      <p>Your event has been sent for review.</p>
+    </div>
+    <ul class="badges" aria-label="Example badges">
+      <li class="badge">Online</li>
+      <li class="badge">Free</li>
+      <li class="badge badge--cancelled">Cancelled</li>
+    </ul>
+  </section>
+</BaseLayout>
