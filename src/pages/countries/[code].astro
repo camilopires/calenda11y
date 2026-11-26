@@ -1,0 +1,60 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import EventList from '../../components/EventList.astro';
+import Pagination from '../../components/Pagination.astro';
+import { countryName } from '../../lib/events/model';
+import { isCountryCode, parseFilters } from '../../lib/events/predicates';
+import { listEvents } from '../../lib/events/query';
+
+const code = (Astro.params.code ?? '').toUpperCase();
+if (!isCountryCode(code)) return Astro.rewrite('/404');
+if (Astro.params.code !== code) return Astro.redirect(`/countries/${code}`, 301);
+
+const params = new URLSearchParams({ country: code });
+const page = Astro.url.searchParams.get('page');
+if (page) params.set('page', page);
+const { filters, errors } = parseFilters(params);
+if (errors.page) return Astro.rewrite('/404');
+const result = await listEvents(filters);
+const name = countryName(code);
+Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
+---
+
+<BaseLayout
+  title={`Accessibility events in ${name}`}
+  description={`Upcoming accessibility conferences, meetups and workshops in ${name}.`}
+  canonical={`/countries/${code}`}
+>
+  <div class="page-head">
+    <h1>Accessibility events in {name}</h1>
+    <p class="lede">
+      {result.total === 0
+        ? 'There are no upcoming events here yet.'
+        : `${result.total} upcoming ${result.total === 1 ? 'event' : 'events'}.`}
+    </p>
+    <ul class="flow-tight">
+      <li>
+        <a class="link-standalone" href={`/?country=${code}`}>
+          Filter events in {name}
+        </a>
+      </li>
+      <li>
+        <a class="link-standalone" href={`/subscribe?country=${code}`}>
+          Subscribe to events in {name}
+        </a>
+      </li>
+    </ul>
+  </div>
+  {result.events.length > 0 ? (
+    <EventList events={result.events} />
+  ) : (
+    <p>
+      <a href="/submit">Add an event in {name}</a> or <a href="/?country=online">find events you can join online</a>.
+    </p>
+  )}
+  <Pagination
+    page={result.page}
+    pages={result.pages}
+    href={(n) => (n > 1 ? `/countries/${code}?page=${n}` : `/countries/${code}`)}
+  />
+</BaseLayout>

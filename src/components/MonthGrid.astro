@@ -1,0 +1,69 @@
+---
+import { formatLongDate, formatMonthYear, longWeekdayName, shortWeekdayName } from '../lib/events/dates';
+import type { MonthGrid } from '../lib/events/grid';
+import type { PublicEvent } from '../lib/events/model';
+
+interface Props {
+  grid: MonthGrid<PublicEvent>;
+  /** Link to the list of all events on a day (for "+ n more"). */
+  dayHref: (date: string) => string;
+}
+const { grid, dayHref } = Astro.props;
+const caption = `${formatMonthYear(grid.month)}: ${grid.eventCount} ${grid.eventCount === 1 ? 'event' : 'events'}`;
+---
+
+{/* A scrollable region must be focusable so keyboard users can scroll it (WCAG 2.1.1). */}
+{/* eslint-disable-next-line astro/jsx-a11y/no-noninteractive-tabindex */}
+<section class="grid-scroll" aria-labelledby="grid-caption" tabindex="0">
+  <table class="month-grid">
+    <caption id="grid-caption">{caption}</caption>
+    <thead>
+      <tr>
+        {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+          <th scope="col" abbr={longWeekdayName(i)}>
+            <span aria-hidden="true">{shortWeekdayName(i)}</span>
+            <span class="visually-hidden">{longWeekdayName(i)}</span>
+          </th>
+        ))}
+      </tr>
+    </thead>
+    <tbody>
+      {grid.weeks.map((week) => (
+        <tr>
+          {week.map((day) => (
+            <td class:list={{ 'is-outside': !day.inMonth, 'is-today': day.isToday }}>
+              <span class="month-grid__day">
+                <span aria-hidden="true">{Number(day.date.slice(8))}</span>
+                <span class="visually-hidden">
+                  {formatLongDate(day.date)}
+                  {day.isToday && ', today'}
+                  {day.events.length === 0 && ', no events'}
+                </span>
+              </span>
+              {day.events.length > 0 && (
+                <ul>
+                  {day.events.map((e) => (
+                    <li>
+                      <a href={`/events/${e.slug}`} lang={e.lang}>
+                        {e.status === 'cancelled' && 'Cancelled: '}
+                        {e.title}
+                      </a>
+                    </li>
+                  ))}
+                  {day.more > 0 && (
+                    <li>
+                      <a href={dayHref(day.date)}>
+                        {day.more} more {day.more === 1 ? 'event' : 'events'}
+                        <span class="visually-hidden"> on {formatLongDate(day.date)}</span>
+                      </a>
+                    </li>
+                  )}
+                </ul>
+              )}
+            </td>
+          ))}
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</section>

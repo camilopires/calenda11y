@@ -1,11 +1,99 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import ErrorSummary from '../components/ErrorSummary.astro';
+import EventList from '../components/EventList.astro';
+import FilterForm from '../components/FilterForm.astro';
+import Pagination from '../components/Pagination.astro';
+import TimeZoneToggle from '../components/TimeZoneToggle.astro';
 import { t } from '../i18n/t';
+import { countryName } from '../lib/events/model';
+import { filtersToParams, parseFilters, ONLINE } from '../lib/events/predicates';
+import { countryCounts, listEvents } from '../lib/events/query';
+
+const { filters, values, errors, active } = parseFilters(Astro.url.searchParams);
+const [result, countries] = await Promise.all([listEvents(filters), countryCounts()]);
+const past = filters.when === 'past';
+
+const pageHref = (n: number) => {
+  const qs = filtersToParams(filters, { page: n }).toString();
+  return qs ? `/?${qs}` : '/';
+};
+const feedQuery = filtersToParams(filters, { includePage: false });
+feedQuery.delete('when');
+const feedQs = feedQuery.toString();
+
+const where =
+  filters.country === ONLINE ? ' you can join online' : filters.country ? ` in ${countryName(filters.country)}` : '';
+const countText =
+  result.total === 0
+    ? `No ${past ? 'past' : 'upcoming'} events found${where}`
+    : `${result.total} ${past ? 'past' : 'upcoming'} ${result.total === 1 ? 'event' : 'events'}${where}` +
+      (result.pages > 1 ? `. Page ${result.page} of ${result.pages}` : '');
+
+Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
 ---
 
-<BaseLayout title={t('site.tagline')} nav="events" isHome>
+<BaseLayout
+  title={past ? 'Past accessibility events' : t('site.tagline')}
+  nav="events"
+  isHome={!past}
+  crumbLabel="Past events"
+>
   <div class="page-head">
-    <h1>{t('site.tagline')}</h1>
-    <p class="lede">Conferences, meetups and workshops about digital accessibility.</p>
+    <h1>{past ? 'Past accessibility events' : t('site.tagline')}</h1>
+    <p class="lede">
+      {past
+        ? 'Events that have already happened.'
+        : 'Conferences, meetups and workshops about digital accessibility, checked by a person before they appear.'}
+    </p>
   </div>
+
+  <ErrorSummary errors={errors} targets={{ format: 'f-format', access: 'f-access' }} />
+
+  <FilterForm values={values} errors={errors} countries={countries} mode="list" action="/" past={past} />
+
+  <div class="results-bar">
+    <p
+      id="results-count"
+      tabindex="-1"
+      data-focus-on-load={active && Object.keys(errors).length === 0 ? '' : undefined}
+    >
+      <strong>{countText}</strong>
+    </p>
+    <p class="small">
+      {past ? (
+        <a class="link-standalone" href="/">
+          See upcoming events
+        </a>
+      ) : (
+        <>
+          <a href={`/subscribe${feedQs ? `?${feedQs}` : ''}`}>Subscribe to these events</a> or{' '}
+          <a href={`/calendar${feedQs ? `?${feedQs}` : ''}`}>see them on a month calendar</a>
+        </>
+      )}
+    </p>
+  </div>
+
+  {result.events.length > 0 && <TimeZoneToggle />}
+
+  {result.events.length > 0 ? (
+    <EventList events={result.events} />
+  ) : (
+    <div class="notice flow-tight">
+      <p>Try fewer filters, or search for a different word.</p>
+      <p>
+        Know about an event that's missing? <a href="/submit">Add an event to calenda11y</a>.
+      </p>
+    </div>
+  )}
+
+  <Pagination page={result.page} pages={result.pages} href={pageHref} />
+
+  {!past && (
+    <p class="small">
+      <a class="link-standalone" href="/?when=past">
+        See past events
+      </a>
+    </p>
+  )}
 </BaseLayout>

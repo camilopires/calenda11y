@@ -1,0 +1,123 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import EventTime from '../../components/EventTime.astro';
+import RichText from '../../components/RichText.astro';
+import AddToCalendar from '../../components/AddToCalendar.astro';
+import TimeZoneToggle from '../../components/TimeZoneToggle.astro';
+import { ACCESS_LABELS, FORMAT_LABELS, PRICE_LABELS, accessProvisions, countryName } from '../../lib/events/model';
+import { getEventBySlug } from '../../lib/events/query';
+
+const event = await getEventBySlug(Astro.params.slug ?? '');
+if (!event) return Astro.rewrite('/404');
+
+const provisions = accessProvisions(event);
+const ended = new Date(event.end_instant).getTime() < Date.now();
+const cancelled = event.status === 'cancelled';
+const country = event.country_code ? countryName(event.country_code) : null;
+Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
+---
+
+<BaseLayout
+  title={event.title}
+  description={event.summary}
+  breadcrumbs={
+    country && event.country_code ? [{ href: `/countries/${event.country_code}`, label: `Events in ${country}` }] : []
+  }
+  canonical={`/events/${event.slug}`}
+>
+  <article aria-labelledby="event-title">
+    <div class="page-head">
+      <h1 id="event-title" lang={event.lang}>
+        {event.title}
+      </h1>
+      <p class="lede" lang={event.lang}>
+        {event.summary}
+      </p>
+    </div>
+
+    {cancelled && (
+      <div class="notice notice--error">
+        <p>
+          <strong>This event has been cancelled.</strong>
+        </p>
+      </div>
+    )}
+    {ended && !cancelled && (
+      <div class="notice notice--important">
+        <p>This event has ended.</p>
+      </div>
+    )}
+
+    <section aria-labelledby="details">
+      <h2 id="details">Event details</h2>
+      <dl class="details-list">
+        <dt>When</dt>
+        <dd>
+          <EventTime event={event} />
+        </dd>
+        <dt>Where</dt>
+        <dd>
+          {event.format === 'online' ? (
+            'Online'
+          ) : (
+            <>
+              {[event.venue, event.city, country].filter(Boolean).join(', ')}
+              {event.format === 'hybrid' && <>. You can also join online.</>}
+            </>
+          )}
+        </dd>
+        <dt>Format</dt>
+        <dd>{FORMAT_LABELS[event.format]}</dd>
+        <dt>Price</dt>
+        <dd>{PRICE_LABELS[event.price]}</dd>
+        {event.organiser && (
+          <>
+            <dt>Organiser</dt>
+            <dd>{event.organiser}</dd>
+          </>
+        )}
+        {event.url && (
+          <>
+            <dt>Website</dt>
+            <dd>
+              <a href={event.url} rel="nofollow ugc">
+                Go to the {event.title} website
+              </a>
+            </dd>
+          </>
+        )}
+      </dl>
+      {!event.all_day && <TimeZoneToggle />}
+    </section>
+
+    <section aria-labelledby="access" class="flow">
+      <h2 id="access">Access</h2>
+      {provisions.length > 0 ? (
+        <ul>
+          {provisions.map((p) => (
+            <li>{ACCESS_LABELS[p]}</li>
+          ))}
+        </ul>
+      ) : (
+        <p>The organiser hasn't told us about any access provisions. Contact them to ask.</p>
+      )}
+      <RichText text={event.access_notes} lang={event.lang} />
+    </section>
+
+    {event.description && (
+      <section aria-labelledby="about-event" class="flow">
+        <h2 id="about-event">About this event</h2>
+        <RichText text={event.description} lang={event.lang} />
+      </section>
+    )}
+
+    {!cancelled && !ended && <AddToCalendar event={event} />}
+
+    <section aria-labelledby="problem" class="flow">
+      <h2 id="problem">Something wrong?</h2>
+      <p>
+        <a href={`/report/${event.slug}`}>Report a problem with this event</a>, such as a wrong date or a broken link.
+      </p>
+    </section>
+  </article>
+</BaseLayout>

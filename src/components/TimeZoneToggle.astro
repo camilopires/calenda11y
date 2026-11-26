@@ -1,0 +1,59 @@
+---
+// Optional: lets visitors see event times in their own time zone. Only
+// appears when JavaScript runs; without it, times show in each event's own
+// time zone (which is always written out).
+---
+
+<div class="tz-toggle" data-tz-toggle hidden>
+  <button type="button" class="button--secondary" aria-pressed="false">
+    Show times in my time zone
+  </button>
+</div>
+
+<script>
+  const container = document.querySelector<HTMLElement>('[data-tz-toggle]');
+  const button = container?.querySelector('button');
+  const times = [...document.querySelectorAll<HTMLElement>('[data-local-time][data-start]')];
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  if (container && button && times.length > 0 && zone) {
+    const city = (zone.split('/').pop() ?? zone).replace(/_/g, ' ');
+    button.textContent = `Show times in my time zone (${city})`;
+    const time = new Intl.DateTimeFormat('en-GB', {
+      timeZone: zone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    });
+    const day = new Intl.DateTimeFormat('en-GB', { timeZone: zone, weekday: 'short', day: 'numeric', month: 'short' });
+
+    const apply = (local: boolean) => {
+      button.setAttribute('aria-pressed', String(local));
+      for (const el of times) {
+        el.dataset.original ??= el.textContent ?? '';
+        if (!local) {
+          el.textContent = el.dataset.original;
+          continue;
+        }
+        const start = new Date(el.dataset.start!);
+        const end = new Date(el.dataset.end!);
+        el.textContent = `${time.format(start)} to ${time.format(end)} your time (${day.format(start)})`;
+      }
+      try {
+        localStorage.setItem('tz-local', local ? '1' : '0');
+      } catch {
+        // Storage can be unavailable (private mode); the toggle still works for this page.
+      }
+    };
+
+    button.addEventListener('click', () => apply(button.getAttribute('aria-pressed') !== 'true'));
+    container.hidden = false;
+    let saved = false;
+    try {
+      saved = localStorage.getItem('tz-local') === '1';
+    } catch {
+      saved = false;
+    }
+    if (saved) apply(true);
+  }
+</script>

@@ -1,0 +1,38 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Accessibility statement" crumbLabel="Accessibility statement">
+  <div class="page-head">
+    <h1>Accessibility statement</h1>
+    <p class="lede">calenda11y is built to meet WCAG 2.2 at level AAA, the highest level.</p>
+  </div>
+  <div class="flow">
+    <h2>What you can do on this site</h2>
+    <ul>
+      <li>Use it with a keyboard, a screen reader, voice control or switch access.</li>
+      <li>Zoom up to 400% without the page breaking or scrolling sideways.</li>
+      <li>
+        Change the colours, text size and spacing in <a href="/settings">display settings</a>.
+      </li>
+      <li>Use every feature without JavaScript.</li>
+      <li>Take as long as you need. Nothing on this site times out.</li>
+    </ul>
+    <h2>How we test</h2>
+    <p>
+      Every page is checked automatically on every change, for colour contrast, keyboard access, focus visibility, valid
+      code and the automated WCAG checks in axe. People also test it with screen readers before each release.
+    </p>
+    <h2>Known limits</h2>
+    <p>
+      Event names, summaries and descriptions are written by organisers, sometimes in other languages. We ask for a
+      plain-language summary of every event, but we can't guarantee the reading level of text we didn't write.
+    </p>
+    <h2>Tell us about a problem</h2>
+    <p>
+      If something on calenda11y doesn't work for you, email
+      <a href="mailto:accessibility@calenda11y.org">accessibility@calenda11y.org</a>. We aim to reply within 5 working
+      days.
+    </p>
+  </div>
+</BaseLayout>

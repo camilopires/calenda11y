@@ -1,0 +1,59 @@
+---
+import EventTime from './EventTime.astro';
+import { dateBlockParts } from '../lib/events/dates';
+import {
+  ACCESS_LABELS,
+  FORMAT_LABELS,
+  PRICE_LABELS,
+  accessProvisions,
+  countryName,
+  type PublicEvent,
+} from '../lib/events/model';
+
+interface Props {
+  event: PublicEvent;
+  headingLevel?: 2 | 3;
+}
+const { event, headingLevel = 3 } = Astro.props;
+const block = dateBlockParts(event.local_start_date);
+const Heading = `h${headingLevel}` as 'h2' | 'h3';
+const where =
+  event.format === 'online'
+    ? 'Online'
+    : [event.city, event.country_code ? countryName(event.country_code) : null].filter(Boolean).join(', ') +
+      (event.format === 'hybrid' ? ', and online' : '');
+const provisions = accessProvisions(event);
+const cancelled = event.status === 'cancelled';
+---
+
+<article class="event" aria-labelledby={`ev-${event.id}`}>
+  <div class="date-block" aria-hidden="true">
+    <span class="date-block__weekday">{block.weekday}</span>
+    <span class="date-block__day">{block.day}</span>
+    <span class="date-block__month">{block.month}</span>
+  </div>
+  <div class="event__body">
+    <Heading class="event__title" id={`ev-${event.id}`}>
+      <a href={`/events/${event.slug}`} lang={event.lang}>
+        {cancelled && <span>Cancelled: </span>}
+        {event.title}
+      </a>
+    </Heading>
+    <p class="event__meta">
+      <EventTime event={event} />
+    </p>
+    <p class="event__meta">
+      {where}
+      {event.organiser && <>. Run by {event.organiser}</>}
+    </p>
+    <p lang={event.lang}>{event.summary}</p>
+    <ul class="badges" aria-label="Details">
+      {cancelled && <li class="badge badge--cancelled">Cancelled</li>}
+      <li class="badge">{FORMAT_LABELS[event.format]}</li>
+      <li class="badge">{PRICE_LABELS[event.price]}</li>
+      {provisions.map((p) => (
+        <li class="badge">{ACCESS_LABELS[p]}</li>
+      ))}
+    </ul>
+  </div>
+</article>

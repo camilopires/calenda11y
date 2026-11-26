@@ -1,0 +1,20 @@
+---
+import { describeWhen } from '../lib/events/dates';
+import type { PublicEvent } from '../lib/events/model';
+
+interface Props {
+  event: PublicEvent;
+}
+const { event } = Astro.props;
+const when = describeWhen(event);
+---
+
+<time datetime={event.all_day ? event.local_start_date : (event.starts_at ?? event.local_start_date)}>{when.date}</time>
+{', '}
+<span
+  data-local-time
+  data-start={event.all_day ? undefined : event.starts_at}
+  data-end={event.all_day ? undefined : event.ends_at}
+>
+  {when.time}
+</span>

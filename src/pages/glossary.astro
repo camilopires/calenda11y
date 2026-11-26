@@ -1,0 +1,86 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const terms: Array<{ id: string; term: string; say?: string; meaning: string }> = [
+  {
+    id: 'a11y',
+    term: 'a11y',
+    say: 'Say it as "A-eleven-Y", or "ally".',
+    meaning: 'Short for accessibility. There are 11 letters between the "a" and the "y".',
+  },
+  {
+    id: 'accessibility',
+    term: 'Accessibility',
+    meaning: 'Making things that disabled people can use as easily as everyone else.',
+  },
+  {
+    id: 'asl',
+    term: 'ASL',
+    meaning: 'American Sign Language. Other countries have their own sign languages, such as BSL in the UK.',
+  },
+  { id: 'bsl', term: 'BSL', meaning: 'British Sign Language.' },
+  {
+    id: 'captions',
+    term: 'Live captions',
+    meaning: 'Words on a screen that show what speakers are saying, as they say it. Also called CART.',
+  },
+  {
+    id: 'hearing-loop',
+    term: 'Hearing loop',
+    meaning:
+      'A system that sends sound straight to hearing aids, so people hear speakers clearly without background noise.',
+  },
+  { id: 'hybrid', term: 'Hybrid event', meaning: 'An event you can go to in person or join online.' },
+  {
+    id: 'ics',
+    term: 'ICS file or iCalendar',
+    meaning: 'A standard file format for calendar events. Most calendar apps can open it.',
+  },
+  {
+    id: 'quiet-room',
+    term: 'Quiet room',
+    meaning: 'A calm space at an event where you can rest away from noise and crowds.',
+  },
+  { id: 'rss', term: 'RSS', meaning: 'A way to follow updates from a website in a feed reader app.' },
+  {
+    id: 'screen-reader',
+    term: 'Screen reader',
+    meaning: 'Software that reads out what is on a screen. Many blind people use one.',
+  },
+  { id: 'step-free', term: 'Step-free', meaning: 'You can get to and around the venue without using stairs or steps.' },
+  {
+    id: 'unconference',
+    term: 'Unconference',
+    meaning: 'An event where the people who come decide the talks on the day.',
+  },
+  {
+    id: 'wcag',
+    term: 'WCAG',
+    say: 'Say it as "wuh-kag".',
+    meaning: 'The Web Content Accessibility Guidelines: the international standard for accessible websites.',
+  },
+  {
+    id: 'webcal',
+    term: 'Calendar subscription',
+    meaning: 'A link your calendar app checks for changes, so new events appear without you doing anything.',
+  },
+];
+---
+
+<BaseLayout title="Glossary" crumbLabel="Glossary">
+  <div class="page-head">
+    <h1>Glossary</h1>
+    <p class="lede">What the words and abbreviations on calenda11y mean.</p>
+  </div>
+  <dl>
+    {terms.map((t) => (
+      <>
+        <dt id={t.id}>{t.term}</dt>
+        <dd>
+          {t.meaning}
+          {t.say && <> {t.say}</>}
+        </dd>
+      </>
+    ))}
+  </dl>
+</BaseLayout>

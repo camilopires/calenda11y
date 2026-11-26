@@ -1,0 +1,13 @@
+---
+// Filled in by milestone 3 (calendar links and .ics downloads).
+import type { PublicEvent } from '../lib/events/model';
+
+interface Props {
+  event: PublicEvent;
+}
+const { event } = Astro.props;
+---
+
+<section aria-labelledby="add-to-calendar" class="flow" data-event={event.id}>
+  <h2 id="add-to-calendar">Add to your calendar</h2>
+</section>

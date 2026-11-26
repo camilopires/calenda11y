@@ -1,0 +1,144 @@
+---
+import Field from './Field.astro';
+import ChoiceGroup from './ChoiceGroup.astro';
+import type { FieldErrors } from '../lib/forms/errors';
+import { ACCESS_LABELS, ACCESS_PROVISIONS, FORMAT_LABELS, FORMATS, countryName } from '../lib/events/model';
+import type { CountryCount } from '../lib/events/query';
+import type { FilterValues } from '../lib/events/predicates';
+
+interface Props {
+  values: FilterValues;
+  errors: FieldErrors;
+  countries: CountryCount[];
+  /** The list has date filters; the month grid is already limited to a month. */
+  mode: 'list' | 'grid';
+  action: string;
+  month?: string;
+  past?: boolean;
+}
+const { values, errors, countries, mode, action, month, past = false } = Astro.props;
+
+const known = new Map(countries.map((c) => [c.country_code, c.upcoming]));
+const selectedCountry = values.country.toUpperCase();
+if (
+  selectedCountry &&
+  selectedCountry !== 'ONLINE' &&
+  !known.has(selectedCountry) &&
+  /^[A-Z]{2}$/.test(selectedCountry)
+) {
+  known.set(selectedCountry, 0);
+}
+const countryOptions = [
+  { value: '', label: 'Any country' },
+  { value: 'online', label: 'Online, from anywhere' },
+  ...[...known.entries()]
+    .map(([code, n]) => ({ value: code, label: `${countryName(code)} (${n} upcoming)` }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'en')),
+];
+const countryValue = values.country.toLowerCase() === 'online' ? 'online' : selectedCountry;
+const moreActive = [
+  values.formats.length,
+  values.access.length,
+  values.from,
+  values.to,
+  errors.format,
+  errors.access,
+  errors.from,
+  errors.to,
+  values.range === 'custom',
+].some(Boolean);
+const moreCount = values.formats.length + values.access.length + (values.from ? 1 : 0) + (values.to ? 1 : 0);
+---
+
+<form class="filters" method="get" action={action} role="search" aria-label="Filter events">
+  {month && <input type="hidden" name="month" value={month} />}
+  {past && <input type="hidden" name="when" value="past" />}
+  <div class="filters__grid">
+    <Field
+      name="q"
+      label="Search"
+      type="search"
+      value={values.q}
+      error={errors.q}
+      maxlength={100}
+      showOptional={false}
+    />
+    <Field
+      name="country"
+      label="Country"
+      type="select"
+      value={countryValue}
+      error={errors.country}
+      options={countryOptions}
+      showOptional={false}
+    />
+    {mode === 'list' && (
+      <Field
+        name="range"
+        label="When"
+        type="select"
+        value={values.range || 'upcoming'}
+        error={errors.range}
+        showOptional={false}
+        options={[
+          { value: 'upcoming', label: past ? 'Any past date' : 'Any upcoming date' },
+          { value: 'this-month', label: 'The rest of this month' },
+          { value: '3-months', label: 'The next 3 months' },
+          { value: 'custom', label: 'Dates I choose' },
+        ]}
+      />
+    )}
+    <Field
+      name="price"
+      label="Price"
+      type="select"
+      value={values.price}
+      error={errors.price}
+      showOptional={false}
+      options={[
+        { value: '', label: 'Free or paid' },
+        { value: 'free', label: 'Free' },
+        { value: 'paid', label: 'Paid' },
+      ]}
+    />
+  </div>
+
+  <details class="filters__more" open={moreActive}>
+    <summary>More filters{moreCount > 0 && <>: {moreCount} chosen</>}</summary>
+    <ChoiceGroup
+      name="format"
+      legend="Format"
+      type="checkbox"
+      inline
+      value={values.formats}
+      error={errors.format}
+      options={FORMATS.map((f) => ({ value: f, label: FORMAT_LABELS[f] }))}
+    />
+    {mode === 'list' && (
+      <fieldset>
+        <legend class="label">Dates</legend>
+        <div class="filters__grid filters__grid--pair">
+          <Field name="from" label="From" type="date" value={values.from} error={errors.from} />
+          <Field name="to" label="To" type="date" value={values.to} error={errors.to} />
+        </div>
+      </fieldset>
+    )}
+    <ChoiceGroup
+      name="access"
+      legend="Access provisions"
+      hint="Only show events that have all of these."
+      type="checkbox"
+      inline
+      value={values.access}
+      error={errors.access}
+      options={ACCESS_PROVISIONS.map((a) => ({ value: a, label: ACCESS_LABELS[a] }))}
+    />
+  </details>
+
+  <div class="button-row filters__actions">
+    <button type="submit">Show events</button>
+    <a class="link-standalone" href={month ? `${action}?month=${month}` : past ? `${action}?when=past` : action}>
+      Clear filters
+    </a>
+  </div>
+</form>

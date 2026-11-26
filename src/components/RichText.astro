@@ -1,0 +1,28 @@
+---
+import { toParagraphs } from '../lib/text/render';
+
+interface Props {
+  text: string | null | undefined;
+  lang?: string | undefined;
+}
+const { text, lang } = Astro.props;
+const paragraphs = toParagraphs(text);
+---
+
+{paragraphs.length > 0 && (
+  <div class="flow" lang={lang}>
+    {paragraphs.map((parts) => (
+      <p>
+        {parts.map((part) =>
+          part.type === 'link' ? (
+            <a href={part.href} rel="nofollow ugc">
+              {part.text}
+            </a>
+          ) : (
+            part.text
+          ),
+        )}
+      </p>
+    ))}
+  </div>
+)}

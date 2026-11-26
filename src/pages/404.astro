@@ -1,0 +1,17 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+Astro.response.status = 404;
+---
+
+<BaseLayout title="Page not found" noindex>
+  <div class="page-head flow">
+    <h1>Page not found</h1>
+    <p class="lede">There's no page at this address. It may have moved, or the event may have been removed.</p>
+    <p>If you typed the address, check it's correct.</p>
+    <p>
+      <a class="link-standalone" href="/">
+        Go to the list of events
+      </a>
+    </p>
+  </div>
+</BaseLayout>

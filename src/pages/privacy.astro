@@ -1,0 +1,49 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Privacy" crumbLabel="Privacy">
+  <div class="page-head">
+    <h1>Privacy</h1>
+    <p class="lede">What we collect, why, and how long we keep it.</p>
+  </div>
+  <div class="flow">
+    <h2>If you just look at events</h2>
+    <p>
+      We don't use analytics, tracking or adverts. We set one cookie only if you change your
+      <a href="/settings">display settings</a>, so the site remembers them.
+    </p>
+    <h2>If you add an event</h2>
+    <p>
+      We keep your email address so we can tell you when your event is checked. We never show it on the site. We delete
+      it 90 days after the event ends.
+    </p>
+    <h2>If you subscribe to emails</h2>
+    <p>
+      We keep your email address and your choices until you unsubscribe. Every email has a link to unsubscribe in one
+      click. If you don't confirm your subscription within 7 days, we delete your email address.
+    </p>
+    <h2>If you sponsor calenda11y</h2>
+    <p>
+      Stripe handles your payment. We keep your name, email address and the details you choose to show on the sponsor
+      page. We never see your card details.
+    </p>
+    <h2>Spam protection</h2>
+    <p>
+      Forms use Cloudflare Turnstile to check you're a person. It doesn't ask you to solve puzzles. Cloudflare may
+      process your IP address to do this. We store a scrambled version of IP addresses for up to a day to limit spam.
+    </p>
+    <h2>Services we use</h2>
+    <ul>
+      <li>Vercel hosts the website.</li>
+      <li>Supabase stores the data.</li>
+      <li>Resend sends emails.</li>
+      <li>Stripe takes sponsorship payments.</li>
+      <li>Cloudflare Turnstile protects forms from spam.</li>
+    </ul>
+    <h2>Questions</h2>
+    <p>
+      Email <a href="mailto:privacy@calenda11y.org">privacy@calenda11y.org</a> to ask about your data or to delete it.
+    </p>
+  </div>
+</BaseLayout>

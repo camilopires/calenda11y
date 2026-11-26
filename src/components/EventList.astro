@@ -1,0 +1,32 @@
+---
+import EventCard from './EventCard.astro';
+import { formatMonthYear, monthOf } from '../lib/events/dates';
+import type { PublicEvent } from '../lib/events/model';
+
+interface Props {
+  events: PublicEvent[];
+}
+const { events } = Astro.props;
+const months: Array<{ month: string; events: PublicEvent[] }> = [];
+for (const e of events) {
+  const m = monthOf(e.local_start_date);
+  const last = months.at(-1);
+  if (last?.month === m) last.events.push(e);
+  else months.push({ month: m, events: [e] });
+}
+---
+
+{months.map((group) => (
+  <section class="month" aria-labelledby={`month-${group.month}`}>
+    <h2 class="month__title" id={`month-${group.month}`}>
+      {formatMonthYear(group.month)}
+    </h2>
+    <ul class="event-list">
+      {group.events.map((e) => (
+        <li>
+          <EventCard event={e} />
+        </li>
+      ))}
+    </ul>
+  </section>
+))}

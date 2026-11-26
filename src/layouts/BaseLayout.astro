@@ -115,5 +115,12 @@ const path = Astro.url.pathname;
       <slot />
     </main>
     <SiteFooter />
+    <script>
+      // Moves focus to the first [data-focus-on-load] element (an error
+      // summary, a confirmation, or the results after filtering), so
+      // keyboard and screen reader users land on what changed. Without
+      // JavaScript these are still the first thing in <main>.
+      document.querySelector<HTMLElement>('[data-focus-on-load]')?.focus();
+    </script>
   </body>
 </html>

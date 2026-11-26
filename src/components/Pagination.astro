@@ -1,0 +1,56 @@
+---
+interface Props {
+  page: number;
+  pages: number;
+  /** Builds the URL for a page number. */
+  href: (page: number) => string;
+}
+const { page, pages, href } = Astro.props;
+// Show the first, last, and two either side of the current page.
+const numbers = [...new Set([1, page - 2, page - 1, page, page + 1, page + 2, pages])]
+  .filter((n) => n >= 1 && n <= pages)
+  .sort((a, b) => a - b);
+---
+
+{pages > 1 && (
+  <nav class="pagination" aria-label="Pages of results">
+    <ul>
+      {page > 1 && (
+        <li>
+          <a href={href(page - 1)} rel="prev">
+            Previous page<span class="visually-hidden">, page {page - 1}</span>
+          </a>
+        </li>
+      )}
+      {numbers.map((n, i) => (
+        <>
+          {i > 0 && n - numbers[i - 1]! > 1 && (
+            <li aria-hidden="true">
+              <span>…</span>
+            </li>
+          )}
+          <li>
+            {n === page ? (
+              <span aria-current="page">
+                <span class="visually-hidden">Page </span>
+                {n}
+              </span>
+            ) : (
+              <a href={href(n)}>
+                <span class="visually-hidden">Page </span>
+                {n}
+              </a>
+            )}
+          </li>
+        </>
+      ))}
+      {page < pages && (
+        <li>
+          <a href={href(page + 1)} rel="next">
+            Next page<span class="visually-hidden">, page {page + 1}</span>
+          </a>
+        </li>
+      )}
+    </ul>
+  </nav>
+)}

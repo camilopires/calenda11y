@@ -35,11 +35,3 @@ const show = entries.length > 0 || general.length > 0;
     </ul>
   </div>
 )}
-
-<script>
-  // Moves focus to the error summary (or any [data-focus-on-load]) when the
-  // page loads, so keyboard and screen reader users land on it. Without
-  // JavaScript the summary is still the first thing in <main>.
-  const target = document.querySelector<HTMLElement>('[data-focus-on-load]');
-  target?.focus();
-</script>

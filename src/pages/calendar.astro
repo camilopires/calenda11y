@@ -1,0 +1,109 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ErrorSummary from '../components/ErrorSummary.astro';
+import FilterForm from '../components/FilterForm.astro';
+import MonthGrid from '../components/MonthGrid.astro';
+import {
+  addDays,
+  endOfMonth,
+  formatMonthYear,
+  isIsoMonth,
+  monthOf,
+  shiftMonth,
+  weekdayIndex,
+} from '../lib/events/dates';
+import { buildMonthGrid } from '../lib/events/grid';
+import { filtersToParams, parseFilters } from '../lib/events/predicates';
+import { clock, countryCounts, listAllEvents } from '../lib/events/query';
+
+const c = clock();
+const params = new URLSearchParams(Astro.url.searchParams);
+const monthParam = params.get('month') ?? '';
+const errors: Record<string, string> = {};
+let month = monthOf(c.today);
+if (monthParam) {
+  if (isIsoMonth(monthParam)) month = monthParam;
+  else errors.month = 'That month does not exist. Showing this month instead';
+}
+
+// The month grid sets its own dates, so date filters from the list are ignored.
+for (const k of ['month', 'range', 'from', 'to', 'when', 'page']) params.delete(k);
+const parsed = parseFilters(params);
+Object.assign(errors, parsed.errors);
+
+const first = `${month}-01`;
+const gridStart = addDays(first, -weekdayIndex(first));
+const gridEnd = addDays(endOfMonth(first), 6 - weekdayIndex(endOfMonth(first)));
+const filters = {
+  ...parsed.filters,
+  range: 'custom' as const,
+  from: gridStart,
+  to: gridEnd,
+  when: 'any' as const,
+  page: 1,
+};
+const [events, countries] = await Promise.all([listAllEvents(filters, c), countryCounts()]);
+const grid = buildMonthGrid(month, events, c.today);
+
+const keep = filtersToParams(parsed.filters, { includePage: false });
+const monthHref = (m: string) => {
+  const p = new URLSearchParams(keep);
+  p.set('month', m);
+  return `/calendar?${p}`;
+};
+const dayHref = (date: string) => {
+  const p = new URLSearchParams(keep);
+  p.set('from', date);
+  p.set('to', date);
+  return `/?${p}`;
+};
+const listQs = keep.toString();
+Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
+---
+
+<BaseLayout title={`Month view: ${formatMonthYear(month)}`} nav="calendar" crumbLabel="Month view">
+  <div class="page-head">
+    <h1>Accessibility events in {formatMonthYear(month)}</h1>
+    <p class="lede">The same events as the list, shown on a calendar.</p>
+  </div>
+
+  <ErrorSummary errors={errors} targets={{ month: 'month-nav', format: 'f-format', access: 'f-access' }} />
+
+  <FilterForm
+    values={parsed.values}
+    errors={errors}
+    countries={countries}
+    mode="grid"
+    action="/calendar"
+    month={month}
+  />
+
+  <nav aria-label="Months" id="month-nav" class="results-bar">
+    <ul class="button-row bare-list">
+      <li>
+        <a class="button button--secondary" href={monthHref(shiftMonth(month, -1))}>
+          Previous month<span class="visually-hidden">: {formatMonthYear(shiftMonth(month, -1))}</span>
+        </a>
+      </li>
+      <li>
+        <a class="button button--secondary" href={monthHref(shiftMonth(month, 1))}>
+          Next month<span class="visually-hidden">: {formatMonthYear(shiftMonth(month, 1))}</span>
+        </a>
+      </li>
+      {month !== monthOf(c.today) && (
+        <li>
+          <a class="link-standalone" href={monthHref(monthOf(c.today))}>
+            Go to this month
+          </a>
+        </li>
+      )}
+    </ul>
+    <p class="small">
+      <a class="link-standalone" href={listQs ? `/?${listQs}` : '/'}>
+        See these events as a list
+      </a>
+    </p>
+  </nav>
+
+  <MonthGrid grid={grid} dayHref={dayHref} />
+</BaseLayout>
