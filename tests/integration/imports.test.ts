@@ -115,6 +115,22 @@ describe('types of imported events', () => {
   });
 });
 
+describe('topics of imported events', () => {
+  it('are guessed when an event is added, and left alone after that', async () => {
+    const source = await makeSource();
+    await runImport(source, later(), ctxFor([calendar(vevent('t', 'WCAG audits', '20270420T100000Z'))]));
+    const { data: ev } = await db.from('events').select('id,topics').eq('source_id', source.id).single();
+    expect(ev!.topics).toEqual(['testing']);
+    await db
+      .from('events')
+      .update({ topics: ['careers'] })
+      .eq('id', ev!.id);
+    await runImport(source, later(), ctxFor([calendar(vevent('t', 'Screen reader basics', '20270420T100000Z'))]));
+    const after = (await db.from('events').select('title,topics').eq('id', ev!.id).single()).data!;
+    expect(after).toEqual({ title: 'Screen reader basics', topics: ['careers'] });
+  });
+});
+
 describe('imports and calls for speakers', () => {
   it('an import update never sets, changes or removes a call for speakers', async () => {
     const source = await makeSource();

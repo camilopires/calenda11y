@@ -168,6 +168,19 @@ test.describe('adding an event', () => {
     await expect(row).toContainText('https://example.org/speak');
   });
 
+  test('topics are optional, and shown on the check page', async ({ page }) => {
+    await page.goto('/submit');
+    const group = page.getByRole('group', { name: /^Topics/ });
+    await expect(group.locator('legend')).toContainText('optional');
+    await fillEventForm(page, { title: `Topical ${uniq()}` });
+    await page.getByRole('checkbox', { name: 'Mobile apps', exact: true }).check();
+    await page.getByRole('checkbox', { name: 'Testing and auditing', exact: true }).check();
+    await page.getByRole('button', { name: 'Continue' }).click();
+    const row = page.locator('.check-answers__row', { has: page.getByText('Topics', { exact: true }) });
+    await expect(row).toContainText('Mobile apps');
+    await expect(row).toContainText('Testing and auditing');
+  });
+
   test('a tampered check page is refused', async ({ page }) => {
     await page.goto('/submit');
     const res = await page.request.post('/submit', {

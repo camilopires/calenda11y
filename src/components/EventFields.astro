@@ -6,9 +6,11 @@ import { LANGUAGES, LIMITS, languageName, type EventFormValues } from '../lib/fo
 import {
   ACCESS_LABELS,
   ACCESS_PROVISIONS,
+  EVENT_TOPICS,
   EVENT_TYPES,
   FORMAT_LABELS,
   FORMATS,
+  TOPIC_LABELS,
   TYPE_LABELS,
 } from '../lib/events/model';
 import { allCountries } from '../lib/events/countries';
@@ -47,6 +49,16 @@ const zones = timeZones();
     value={v.types}
     error={e.type}
     options={EVENT_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }))}
+  />
+  <ChoiceGroup
+    name="topic"
+    legend="Topics"
+    hint="Choose any that fit."
+    type="checkbox"
+    inline
+    value={v.topics}
+    error={e.topic}
+    options={EVENT_TOPICS.map((t) => ({ value: t, label: TOPIC_LABELS[t] }))}
   />
   <Field
     name="description"

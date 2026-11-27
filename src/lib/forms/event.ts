@@ -5,10 +5,12 @@
 import type { FieldErrors } from './errors.ts';
 import {
   ACCESS_PROVISIONS,
+  EVENT_TOPICS,
   EVENT_TYPES,
   FORMATS,
   PRICES,
   type AccessProvision,
+  type EventTopic,
   type EventType,
   type Format,
   type Price,
@@ -84,6 +86,7 @@ export interface EventFormValues {
   timezone: string;
   format: string;
   types: string[];
+  topics: string[];
   country: string;
   city: string;
   venue: string;
@@ -115,6 +118,7 @@ export interface EventRecord {
   timezone: string;
   format: Format;
   types: EventType[];
+  topics: EventTopic[];
   country_code: string | null;
   city: string | null;
   venue: string | null;
@@ -152,6 +156,7 @@ export function readEventForm(form: FormData): EventFormValues {
     timezone: str(form, 'timezone'),
     format: str(form, 'format'),
     types: form.getAll('type').filter((v): v is string => typeof v === 'string'),
+    topics: form.getAll('topic').filter((v): v is string => typeof v === 'string'),
     country: str(form, 'country').toUpperCase(),
     city: str(form, 'city'),
     venue: str(form, 'venue'),
@@ -182,6 +187,7 @@ export const EMPTY_EVENT_FORM: EventFormValues = {
   timezone: '',
   format: '',
   types: [],
+  topics: [],
   country: '',
   city: '',
   venue: '',
@@ -294,6 +300,10 @@ export function validateEvent(v: EventFormValues, options: ValidateOptions): Eve
   const types = EVENT_TYPES.filter((t) => v.types.includes(t));
   if (v.types.some((t) => !(EVENT_TYPES as readonly string[]).includes(t))) errors.type = 'Choose types from the list';
   else if (!types.length) errors.type = 'Choose at least one type of event';
+  // What it's about (optional)
+  const topics = EVENT_TOPICS.filter((t) => v.topics.includes(t));
+  if (v.topics.some((t) => !(EVENT_TOPICS as readonly string[]).includes(t)))
+    errors.topic = 'Choose topics from the list';
 
   // Where
   if (!(FORMATS as readonly string[]).includes(v.format)) errors.format = 'Choose how people can attend';
@@ -353,6 +363,7 @@ export function validateEvent(v: EventFormValues, options: ValidateOptions): Eve
       timezone: v.timezone,
       format: v.format as Format,
       types,
+      topics,
       country_code: online ? null : v.country,
       city: online ? null : v.city || null,
       venue: online ? null : v.venue || null,
@@ -432,6 +443,7 @@ export function recordToForm(e: EventRecord & { local_end_date?: string }): Even
     timezone: e.timezone,
     format: e.format,
     types: [...(e.types ?? [])],
+    topics: [...(e.topics ?? [])],
     country: e.country_code ?? '',
     city: e.city ?? '',
     venue: e.venue ?? '',

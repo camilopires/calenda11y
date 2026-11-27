@@ -13,7 +13,7 @@
  */
 import { db } from '../db.ts';
 import { newSlug } from '../forms/event.ts';
-import { guessTypes } from './normalise.ts';
+import { guessTopics, guessTypes } from './normalise.ts';
 import { ServiceError, unwrap, unwrapMaybe } from '../result.ts';
 import { randomToken } from '../security/tokens.ts';
 import type { ImportedEvent, SourceType } from './types.ts';
@@ -103,6 +103,7 @@ export async function upsertImported(sourceId: string, type: SourceType, item: I
           slug: newSlug(item.fields.title, shortId),
           // Set once, here; after that a person owns the types (see guessTypes).
           ...withGuessedTypes(item.fields.title, type),
+          topics: guessTopics(item.fields.title, item.fields.description ?? null),
           status: 'pending',
           source: type,
           source_id: sourceId,

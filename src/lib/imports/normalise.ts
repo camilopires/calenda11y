@@ -2,7 +2,7 @@
 import sanitizeHtml from 'sanitize-html';
 import { isCountryCode } from '../events/predicates.ts';
 import { isValidTimeZone } from '../events/tz.ts';
-import { EVENT_TYPES, type EventType } from '../events/model.ts';
+import { EVENT_TOPICS, EVENT_TYPES, type EventTopic, type EventType } from '../events/model.ts';
 import type { ImportSource, ImportedEvent, RawEvent, SourceType } from './types.ts';
 
 /** Whole words in a title that suggest a type of event. */
@@ -13,6 +13,31 @@ const TYPE_WORDS: Record<Exclude<EventType, 'other'>, RegExp> = {
   talk: /\b(webinar|talk|lecture)s?\b/i,
   training: /\b(course|training|bootcamp)s?\b/i,
 };
+
+/** Whole words in a title or description that suggest a topic. Case doesn't matter, except where noted. */
+const TOPIC_WORDS: Record<EventTopic, RegExp[]> = {
+  inclusive_design: [/\binclusive( design)?\b/i, /\bco-design\b/i],
+  neurodiversity: [/\bneurodiver\w*/i, /\bADHD\b/i, /\bautis\w*/i, /\bdyslexi\w*/i, /\bcognitive\b/i],
+  design_systems: [/\bdesign systems?\b/i, /\bcomponent librar(y|ies)\b/i],
+  web_development: [/\b(developers?|front-end|frontend|HTML|ARIA|JavaScript|React)\b/i],
+  mobile: [/\b(iOS|Android|mobile)\b/i],
+  content: [/\bplain (language|English)\b/i, /\bcontent design\b/i, /\breadability\b/i, /\b(PDFs?|documents?)\b/i],
+  testing: [/\b(WCAG|audits?|auditing|testing|tests?)\b/i],
+  // "ADA" and "EAA" only in capitals, so "Ada Lovelace" isn't a law event.
+  law: [/\b(ADA|EAA)\b/, /\bSection 508\b/i, /\bEN 301 549\b/i, /\b(legislation|compliance|lawsuits?|law)\b/i],
+  assistive_tech: [/\bscreen readers?\b/i, /\bassistive\b/i, /\b(NVDA|JAWS|VoiceOver)\b/i, /\bswitch access\b/i],
+  careers: [/\b(careers?|leadership|hiring|jobs?)\b/i],
+};
+
+/**
+ * A best guess at an imported event's topics, from its title and
+ * description. Empty is fine: topics are optional. Like types, they're only
+ * guessed when an event is first added; after that a person owns them.
+ */
+export function guessTopics(title: string, description: string | null): EventTopic[] {
+  const text = `${title}\n${description ?? ''}`;
+  return EVENT_TOPICS.filter((t) => TOPIC_WORDS[t].some((re) => re.test(text)));
+}
 
 /**
  * A best guess at an imported event's types, from its source and title.

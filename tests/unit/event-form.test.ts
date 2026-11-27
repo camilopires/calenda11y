@@ -267,3 +267,28 @@ describe('call for speakers on the form', () => {
     expect(EMPTY_EVENT_FORM).toMatchObject({ cfp_url: '', cfp_closes_on: '' });
   });
 });
+
+describe('topics on the form', () => {
+  it('are optional, kept in list order, once each', () => {
+    const none = validateEvent(valid(), { now: NOW });
+    expect(none.ok && none.record.topics).toEqual([]);
+    const r = validateEvent(valid({ topics: ['law', 'testing', 'law'] }), { now: NOW });
+    expect(r.ok && r.record.topics).toEqual(['testing', 'law']);
+  });
+
+  it('refuses topics that are not on the list', () => {
+    const r = validateEvent(valid({ topics: ['cooking'] }), { now: NOW });
+    expect(!r.ok && r.errors.topic).toBe('Choose topics from the list');
+  });
+
+  it('are read from repeated fields and round-trip', () => {
+    const fd = new FormData();
+    fd.append('topic', 'mobile');
+    fd.append('topic', 'content');
+    expect(readEventForm(fd).topics).toEqual(['mobile', 'content']);
+    const r = validateEvent(valid({ topics: ['mobile'] }), { now: NOW });
+    if (!r.ok) throw new Error('expected valid');
+    expect(recordToForm(r.record).topics).toEqual(['mobile']);
+    expect(EMPTY_EVENT_FORM.topics).toEqual([]);
+  });
+});
