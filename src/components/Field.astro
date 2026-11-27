@@ -22,6 +22,8 @@ interface Props {
   error?: string | undefined;
   required?: boolean;
   options?: Option[];
+  /** For selects: options in labelled groups, shown after `options`. */
+  groups?: Array<{ label: string; options: Option[] }>;
   autocomplete?: string;
   inputmode?: 'text' | 'email' | 'url' | 'numeric' | 'search';
   maxlength?: number;
@@ -42,6 +44,7 @@ const {
   error,
   required = false,
   options = [],
+  groups = [],
   autocomplete,
   inputmode,
   maxlength,
@@ -90,6 +93,15 @@ const common = {
         <option value={o.value} selected={o.value === value}>
           {o.label}
         </option>
+      ))}
+      {groups.map((g) => (
+        <optgroup label={g.label}>
+          {g.options.map((o) => (
+            <option value={o.value} selected={o.value === value}>
+              {o.label}
+            </option>
+          ))}
+        </optgroup>
       ))}
     </select>
   ) : (

@@ -67,6 +67,81 @@ test.describe('event pages', () => {
     await context.close();
   });
 
+  test('filtering by type works without JavaScript, from the visible part of the form', async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false, baseURL: baseURL! });
+    const page = await context.newPage();
+    await page.goto('/');
+    // Format and Type are not hidden under "More filters".
+    await expect(page.getByRole('checkbox', { name: 'Online', exact: true })).toBeVisible();
+    await page.getByRole('checkbox', { name: 'Conference', exact: true }).check();
+    await page.getByRole('button', { name: 'Show events' }).click();
+    await expect(page).toHaveURL(/[?&]type=conference/);
+    await expect(page.locator('#results-count')).toContainText(/\d+ upcoming conferences/);
+    await expect(page.getByRole('link', { name: 'Nordic Accessibility Summit' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Online accessibility talk/ })).toHaveCount(0);
+    await expect(page.getByRole('checkbox', { name: 'Conference', exact: true })).toBeChecked();
+    await context.close();
+  });
+
+  const monthAhead = (n: number) => {
+    const d = new Date();
+    d.setUTCDate(1);
+    d.setUTCMonth(d.getUTCMonth() + n);
+    return {
+      value: d.toISOString().slice(0, 7),
+      label: d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
+    };
+  };
+
+  test('picking a month shows only that month, and the choice stays selected', async ({ browser, baseURL }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false, baseURL: baseURL! });
+    const page = await context.newPage();
+    const next = monthAhead(1);
+    await page.goto('/');
+    await page.getByLabel('When').selectOption(next.value);
+    await page.getByRole('button', { name: 'Show events' }).click();
+    await expect(page).toHaveURL(new RegExp(`[?&]range=${next.value}`));
+    await expect(page.getByLabel('When')).toHaveValue(next.value);
+    await expect(page.locator('#results-count')).toContainText(`in ${next.label}`);
+    const headings = await page.locator('.month__title').allTextContents();
+    expect(headings.length).toBeGreaterThan(0);
+    for (const h of headings) expect(h.trim()).toBe(next.label);
+    await context.close();
+  });
+
+  test('the When list offers the next 12 months, or the previous 12 for past events', async ({ page }) => {
+    await page.goto('/');
+    const ahead = page.locator('select[name="range"] optgroup[label="Months"] option');
+    await expect(ahead).toHaveCount(12);
+    await expect(ahead.first()).toHaveText(monthAhead(0).label);
+    await expect(ahead.nth(11)).toHaveText(monthAhead(11).label);
+    await page.goto('/?when=past');
+    const back = page.locator('select[name="range"] optgroup[label="Months"] option');
+    await expect(back).toHaveCount(12);
+    await expect(back.nth(1)).toHaveText(monthAhead(-1).label);
+  });
+
+  test('choosing a month after custom dates, without JavaScript, gives that month', async ({ browser, baseURL }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false, baseURL: baseURL! });
+    const page = await context.newPage();
+    const later = monthAhead(2);
+    await page.goto('/?range=custom&from=2030-01-01&to=2030-01-31');
+    await page.getByLabel('When').selectOption(later.value);
+    await page.getByRole('button', { name: 'Show events' }).click();
+    await expect(page.locator('#results-count')).toContainText(`in ${later.label}`);
+    await expect(page.locator('.error-summary')).toHaveCount(0);
+    await context.close();
+  });
+
+  test('a shared link to a month outside the list still works and shows in the list', async ({ page }) => {
+    await page.goto('/?range=2031-05');
+    await expect(page.getByLabel('When')).toHaveValue('2031-05');
+    await expect(page.locator('#results-count')).toContainText('in May 2031');
+  });
+
   test('access provision filters need every chosen provision', async ({ page }) => {
     await page.goto('/?access=sign_language&access=quiet_room');
     const titles = await page.locator('.event__title').allTextContents();

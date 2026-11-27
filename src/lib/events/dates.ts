@@ -169,3 +169,15 @@ export function describeWhen(e: EventTiming): WhenLabel {
   const zone = city === 'UTC' ? 'UTC' : `${city} time (${utcOffsetLabel(e.starts_at, e.timezone)})`;
   return { date, time: `${timeIn(e.starts_at, e.timezone)} to ${timeIn(e.ends_at, e.timezone)}, ${zone}` };
 }
+
+/**
+ * The months offered in the "When" filter: this month and the next 11, or
+ * (for past events) this month and the previous 11, newest first.
+ */
+export function monthOptions(today: string, past: boolean): Array<{ value: string; label: string }> {
+  const start = monthOf(today);
+  return Array.from({ length: 12 }, (_, i) => {
+    const value = shiftMonth(start, past ? -i : i);
+    return { value, label: formatMonthYear(value) };
+  });
+}

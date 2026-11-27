@@ -8,18 +8,23 @@ import type { FieldErrors } from '../forms/errors.ts';
 import {
   ACCESS_LABELS,
   ACCESS_PROVISIONS,
+  EVENT_TYPES,
   FORMAT_LABELS,
   FORMATS,
   PRICES,
+  TYPE_PLURALS,
   countryName,
   type AccessProvision,
+  type EventType,
   type Format,
   type Price,
 } from './model.ts';
-import { addDays, addMonths, endOfMonth, isIsoDate } from './dates.ts';
+import { addDays, addMonths, endOfMonth, formatMonthYear, isIsoDate, isIsoMonth } from './dates.ts';
 
+/** The named ranges a URL can ask for. A month is given as `range=YYYY-MM`. */
 export const RANGES = ['upcoming', 'this-month', '3-months', 'custom'] as const;
-export type Range = (typeof RANGES)[number];
+/** 'month' is internal: the URL carries the month itself (`range=2027-01`). */
+export type Range = (typeof RANGES)[number] | 'month';
 
 export const ONLINE = 'online';
 
@@ -27,7 +32,11 @@ export interface Filters {
   /** ISO 3166-1 alpha-2 code, or "online" for events you can join online. */
   country?: string;
   formats: Format[];
+  /** Any of these types (empty: no type filter). */
+  types: EventType[];
   range: Range;
+  /** YYYY-MM, only for range = month. */
+  month?: string;
   /** Inclusive local dates, only for range = custom. */
   from?: string;
   to?: string;
@@ -45,6 +54,7 @@ export interface Filters {
 export interface FilterValues {
   country: string;
   formats: string[];
+  types: string[];
   range: string;
   from: string;
   to: string;
@@ -75,6 +85,7 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
   const values: FilterValues = {
     country: (params.get('country') ?? '').trim(),
     formats: params.getAll('format'),
+    types: params.getAll('type'),
     range: params.get('range') ?? '',
     from: params.get('from') ?? '',
     to: params.get('to') ?? '',
@@ -82,7 +93,7 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
     access: params.getAll('access'),
     q: (params.get('q') ?? '').trim(),
   };
-  const filters: Filters = { formats: [], range: 'upcoming', access: [], when: 'upcoming', page: 1 };
+  const filters: Filters = { formats: [], types: [], range: 'upcoming', access: [], when: 'upcoming', page: 1 };
 
   if (values.country) {
     const upper = values.country.toUpperCase();
@@ -97,12 +108,22 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
     } else errors.format = 'Choose a format from the list';
   }
 
+  if (values.types.some((t) => !(EVENT_TYPES as readonly string[]).includes(t))) {
+    errors.type = 'Choose a type from the list';
+  }
+  filters.types = EVENT_TYPES.filter((t) => values.types.includes(t));
+
   if (values.range) {
     if ((RANGES as readonly string[]).includes(values.range)) filters.range = values.range as Range;
-    else errors.range = 'Choose when from the list';
+    else if (isIsoMonth(values.range)) {
+      filters.range = 'month';
+      filters.month = values.range;
+    } else errors.range = 'Choose when from the list';
   }
 
-  if (filters.range === 'custom' || values.from || values.to) {
+  // A chosen month wins over dates left in the form from an earlier search
+  // (without JavaScript, the date fields are always sent).
+  if (filters.range !== 'month' && (filters.range === 'custom' || values.from || values.to)) {
     let from: string | undefined;
     let to: string | undefined;
     if (values.from) {
@@ -154,7 +175,9 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
     else errors.page = 'That page number does not exist';
   }
 
-  const active = ['country', 'format', 'range', 'from', 'to', 'price', 'access', 'q'].some((k) => params.has(k));
+  const active = ['country', 'format', 'type', 'range', 'from', 'to', 'price', 'access', 'q'].some((k) =>
+    params.has(k),
+  );
   return { filters, values, errors, active };
 }
 
@@ -165,6 +188,8 @@ export function dateWindow(filters: Filters, today: string): { from?: string; to
       return { from: today, to: endOfMonth(today) };
     case '3-months':
       return { from: today, to: addDays(addMonths(today, 3), -1) };
+    case 'month':
+      return filters.month ? { from: `${filters.month}-01`, to: endOfMonth(`${filters.month}-01`) } : {};
     case 'custom':
       return { ...(filters.from && { from: filters.from }), ...(filters.to && { to: filters.to }) };
     default:
@@ -180,6 +205,7 @@ export interface FilterableQuery {
   lte(column: string, value: unknown): this;
   gt(column: string, value: unknown): this;
   lt(column: string, value: unknown): this;
+  overlaps(column: string, values: readonly unknown[]): this;
   textSearch(column: string, query: string, options: { type: 'websearch'; config: string }): this;
 }
 
@@ -199,6 +225,7 @@ export function applyFilters<Q extends FilterableQuery>(query: Q, filters: Filte
   if (filters.country && filters.country !== ONLINE) q = q.eq('country_code', filters.country);
   const formats = effectiveFormats(filters);
   if (formats) q = q.in('format', formats);
+  if (filters.types.length) q = q.overlaps('types', filters.types);
 
   if (filters.when === 'past') q = q.lt('end_instant', now);
   else if (filters.when === 'upcoming') q = q.gt('end_instant', now);
@@ -223,9 +250,14 @@ export function filtersToParams(
   const p = new URLSearchParams();
   if (filters.country) p.set('country', filters.country);
   for (const f of filters.formats) p.append('format', f);
-  if (filters.range !== 'upcoming') p.set('range', filters.range);
-  if (filters.from) p.set('from', filters.from);
-  if (filters.to) p.set('to', filters.to);
+  for (const t of filters.types) p.append('type', t);
+  if (filters.range === 'month') {
+    if (filters.month) p.set('range', filters.month);
+  } else if (filters.range !== 'upcoming') p.set('range', filters.range);
+  if (filters.range === 'custom') {
+    if (filters.from) p.set('from', filters.from);
+    if (filters.to) p.set('to', filters.to);
+  }
   if (filters.price) p.set('price', filters.price);
   for (const a of filters.access) p.append('access', a);
   if (filters.q) p.set('q', filters.q);
@@ -239,7 +271,8 @@ export function filtersToParams(
 export function describeFilters(filters: Filters): string {
   const parts: string[] = [];
   const formats = filters.formats.map((f) => FORMAT_LABELS[f].toLowerCase());
-  const subject = filters.price ? `${filters.price} events` : 'events';
+  const kinds = filters.types.length ? filters.types.map((t) => TYPE_PLURALS[t]).join(' or ') : 'events';
+  const subject = filters.price ? `${filters.price} ${kinds}` : kinds;
   let text = formats.length ? `${formats.join(' or ')} ${subject}` : subject;
   if (filters.country === ONLINE) text = `${text} you can join online`;
   else if (filters.country) text = `${text} in ${countryName(filters.country)}`;
@@ -250,7 +283,9 @@ export function describeFilters(filters: Filters): string {
   const window =
     filters.range === 'custom'
       ? [filters.from && `from ${filters.from}`, filters.to && `to ${filters.to}`].filter(Boolean).join(' ')
-      : '';
+      : filters.range === 'month' && filters.month
+        ? `in ${formatMonthYear(filters.month)}`
+        : '';
   if (window) parts.push(window);
   const result = parts.join(' ');
   return result === 'events' ? 'all events' : result;

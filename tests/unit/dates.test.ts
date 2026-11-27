@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  monthOptions,
   addDays,
   addMonths,
   dateBlockParts,
@@ -110,5 +111,22 @@ describe('formatting', () => {
         timezone: 'Europe/Stockholm',
       }),
     ).toEqual({ date: 'Thursday 31 December 2026 to Friday 1 January 2027', time: 'All days' });
+  });
+});
+
+describe('monthOptions', () => {
+  it('lists this month and the next 11, crossing the year', () => {
+    const m = monthOptions('2026-12-15', false);
+    expect(m).toHaveLength(12);
+    expect(m[0]).toEqual({ value: '2026-12', label: 'December 2026' });
+    expect(m[1]).toEqual({ value: '2027-01', label: 'January 2027' });
+    expect(m[11]).toEqual({ value: '2027-11', label: 'November 2027' });
+  });
+
+  it('lists this month and the previous 11 for past events, newest first', () => {
+    const m = monthOptions('2026-01-31', true);
+    expect(m[0]).toEqual({ value: '2026-01', label: 'January 2026' });
+    expect(m[1]).toEqual({ value: '2025-12', label: 'December 2025' });
+    expect(m[11]!.value).toBe('2025-02');
   });
 });

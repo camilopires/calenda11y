@@ -2,7 +2,16 @@
 import Field from './Field.astro';
 import ChoiceGroup from './ChoiceGroup.astro';
 import type { FieldErrors } from '../lib/forms/errors';
-import { ACCESS_LABELS, ACCESS_PROVISIONS, FORMAT_LABELS, FORMATS, countryName } from '../lib/events/model';
+import {
+  ACCESS_LABELS,
+  ACCESS_PROVISIONS,
+  EVENT_TYPES,
+  FORMAT_LABELS,
+  FORMATS,
+  TYPE_LABELS,
+  countryName,
+} from '../lib/events/model';
+import { formatMonthYear, isIsoMonth, monthOptions, todayUtc } from '../lib/events/dates';
 import type { CountryCount } from '../lib/events/query';
 import type { FilterValues } from '../lib/events/predicates';
 
@@ -36,18 +45,25 @@ const countryOptions = [
     .sort((a, b) => a.label.localeCompare(b.label, 'en')),
 ];
 const countryValue = values.country.toLowerCase() === 'online' ? 'online' : selectedCountry;
+// A chosen month ignores leftover dates, so they don't open "More filters" either.
+const monthChosen = isIsoMonth(values.range);
 const moreActive = [
-  values.formats.length,
   values.access.length,
-  values.from,
-  values.to,
-  errors.format,
+  !monthChosen && values.from,
+  !monthChosen && values.to,
   errors.access,
   errors.from,
   errors.to,
   values.range === 'custom',
 ].some(Boolean);
-const moreCount = values.formats.length + values.access.length + (values.from ? 1 : 0) + (values.to ? 1 : 0);
+const moreCount = values.access.length + (!monthChosen && values.from ? 1 : 0) + (!monthChosen && values.to ? 1 : 0);
+
+// This month and the next 11 (or the previous 11 for past events). A month
+// from a shared link that isn't in the list is added, so the select shows it.
+const months = monthOptions(todayUtc(), past);
+if (monthChosen && !months.some((m) => m.value === values.range)) {
+  months.push({ value: values.range, label: formatMonthYear(values.range) });
+}
 ---
 
 <form class="filters" method="get" action={action} role="search" aria-label="Filter events">
@@ -86,6 +102,7 @@ const moreCount = values.formats.length + values.access.length + (values.from ? 
           { value: '3-months', label: 'The next 3 months' },
           { value: 'custom', label: 'Dates I choose' },
         ]}
+        groups={[{ label: 'Months', options: months }]}
       />
     )}
     <Field
@@ -103,8 +120,7 @@ const moreCount = values.formats.length + values.access.length + (values.from ? 
     />
   </div>
 
-  <details class="filters__more" open={moreActive}>
-    <summary>More filters{moreCount > 0 && <>: {moreCount} chosen</>}</summary>
+  <div class="filters__kinds">
     <ChoiceGroup
       name="format"
       legend="Format"
@@ -114,6 +130,19 @@ const moreCount = values.formats.length + values.access.length + (values.from ? 
       error={errors.format}
       options={FORMATS.map((f) => ({ value: f, label: FORMAT_LABELS[f] }))}
     />
+    <ChoiceGroup
+      name="type"
+      legend="Type"
+      type="checkbox"
+      inline
+      value={values.types}
+      error={errors.type}
+      options={EVENT_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }))}
+    />
+  </div>
+
+  <details class="filters__more" open={moreActive}>
+    <summary>More filters{moreCount > 0 && <>: {moreCount} chosen</>}</summary>
     {mode === 'list' && (
       <fieldset>
         <legend class="label">Dates</legend>

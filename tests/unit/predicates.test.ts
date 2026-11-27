@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyFilters,
+  describeFilters,
   dateWindow,
   effectiveFormats,
   filtersToParams,
@@ -36,6 +37,10 @@ class Recorder implements FilterableQuery {
     this.calls.push(['lt', c, v]);
     return this;
   }
+  overlaps(c: string, v: readonly unknown[]) {
+    this.calls.push(['overlaps', c, v]);
+    return this;
+  }
   textSearch(c: string, q: string, o: unknown) {
     this.calls.push(['textSearch', c, q, o]);
     return this;
@@ -50,7 +55,7 @@ describe('parseFilters', () => {
     const r = parse('');
     expect(r.errors).toEqual({});
     expect(r.active).toBe(false);
-    expect(r.filters).toEqual({ formats: [], range: 'upcoming', access: [], when: 'upcoming', page: 1 });
+    expect(r.filters).toEqual({ formats: [], types: [], range: 'upcoming', access: [], when: 'upcoming', page: 1 });
   });
 
   it('parses every filter', () => {
@@ -173,8 +178,6 @@ describe('filtersToParams', () => {
   });
 });
 
-import { describeFilters } from '../../src/lib/events/predicates.ts';
-
 describe('describeFilters', () => {
   it.each([
     ['', 'all events'],
@@ -194,5 +197,72 @@ describe('since', () => {
     expect(applyFilters(new Recorder(), f, NOW, TODAY).calls).toEqual([
       ['gt', 'end_instant', '2026-10-01T00:00:00.000Z'],
     ]);
+  });
+});
+
+describe('event type filter', () => {
+  it('reads repeated types, drops repeats, and keeps the list order', () => {
+    const { filters, errors } = parse('type=workshop&type=conference&type=workshop');
+    expect(errors).toEqual({});
+    expect(filters.types).toEqual(['conference', 'workshop']);
+  });
+
+  it('refuses unknown types', () => {
+    expect(parse('type=party').errors.type).toBe('Choose a type from the list');
+  });
+
+  it('filters with an overlap (any of the types)', () => {
+    const r = new Recorder();
+    applyFilters(r, parse('type=talk&type=meetup').filters, '2026-11-27T12:00:00Z', '2026-11-27');
+    expect(r.calls).toContainEqual(['overlaps', 'types', ['meetup', 'talk']]);
+  });
+
+  it('round-trips through the URL and counts as an active filter', () => {
+    const p = parse('type=talk');
+    expect(p.active).toBe(true);
+    expect(filtersToParams(p.filters).getAll('type')).toEqual(['talk']);
+  });
+
+  it('is described in plain words', () => {
+    expect(describeFilters(parse('type=conference&type=workshop&country=PT').filters)).toBe(
+      'conferences or workshops in Portugal',
+    );
+    expect(describeFilters(parse('type=talk&format=online').filters)).toBe('online talks and webinars');
+  });
+});
+
+describe('month filter', () => {
+  it('accepts a real month', () => {
+    const { filters, errors } = parse('range=2027-01');
+    expect(errors).toEqual({});
+    expect(filters).toMatchObject({ range: 'month', month: '2027-01' });
+  });
+
+  it.each(['2027-13', '2027-1', 'month', '1800-01', '0001-01'])('refuses %s', (range) => {
+    expect(parse(`range=${range}`).errors.range).toBe('Choose when from the list');
+  });
+
+  it('covers the whole month, with the right last day', () => {
+    expect(dateWindow(parse('range=2027-01').filters, '2026-11-27')).toEqual({ from: '2027-01-01', to: '2027-01-31' });
+    expect(dateWindow(parse('range=2026-12').filters, '2026-11-27')).toEqual({ from: '2026-12-01', to: '2026-12-31' });
+    expect(dateWindow(parse('range=2028-02').filters, '2026-11-27')).toEqual({ from: '2028-02-01', to: '2028-02-29' });
+  });
+
+  it('wins over dates left in the form from before, which are dropped', () => {
+    const { filters, errors } = parse('range=2027-03&from=2027-01-01&to=2027-01-10');
+    expect(errors).toEqual({});
+    expect(filters).toMatchObject({ range: 'month', month: '2027-03' });
+    expect(filters.from).toBeUndefined();
+    const p = filtersToParams(filters);
+    expect(p.get('range')).toBe('2027-03');
+    expect(p.has('from')).toBe(false);
+  });
+
+  it('still lets plain from/to links work', () => {
+    expect(parse('from=2027-01-01&to=2027-01-10').filters).toMatchObject({ range: 'custom', from: '2027-01-01' });
+  });
+
+  it('is described with the month name', () => {
+    expect(describeFilters(parse('range=2027-01&type=conference').filters)).toBe('conferences in January 2027');
   });
 });

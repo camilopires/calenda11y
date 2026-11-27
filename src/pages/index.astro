@@ -6,7 +6,8 @@ import FilterForm from '../components/FilterForm.astro';
 import Pagination from '../components/Pagination.astro';
 import TimeZoneToggle from '../components/TimeZoneToggle.astro';
 import { t } from '../i18n/t';
-import { countryName } from '../lib/events/model';
+import { TYPE_PLURALS, countryName } from '../lib/events/model';
+import { formatMonthYear } from '../lib/events/dates';
 import { filtersToParams, parseFilters, ONLINE } from '../lib/events/predicates';
 import { countryCounts, listEvents } from '../lib/events/query';
 
@@ -25,10 +26,13 @@ const feedQs = feedQuery.toString();
 const where =
   filters.country === ONLINE ? ' you can join online' : filters.country ? ` in ${countryName(filters.country)}` : '';
 const kind = filters.when === 'any' ? '' : past ? 'past ' : 'upcoming ';
+// "conferences or workshops" when types are chosen; one result is just "event".
+const plural = filters.types.length ? filters.types.map((ty) => TYPE_PLURALS[ty]).join(' or ') : 'events';
+const inMonth = filters.range === 'month' && filters.month ? ` in ${formatMonthYear(filters.month)}` : '';
 const countText =
   result.total === 0
-    ? `No ${kind}events found${where}`
-    : `${result.total} ${kind}${result.total === 1 ? 'event' : 'events'}${where}` +
+    ? `No ${kind}${plural} found${where}${inMonth}`
+    : `${result.total} ${kind}${result.total === 1 ? 'event' : plural}${where}${inMonth}` +
       (result.pages > 1 ? `. Page ${result.page} of ${result.pages}` : '');
 ---
 

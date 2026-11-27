@@ -671,6 +671,19 @@ input[type='radio'] {
   margin-block-start: 0;
 }
 
+/* Format and Type, shown under the main filters. */
+.filters__kinds {
+  display: grid;
+  gap: var(--space-4) var(--space-5);
+  margin-block-start: var(--space-4);
+}
+
+@media (min-width: 72em) {
+  .filters__kinds {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+}
+
 .filters details {
   margin-block-start: var(--space-4);
 }
