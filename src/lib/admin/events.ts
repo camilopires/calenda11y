@@ -31,13 +31,18 @@ export interface AdminEvent extends EventRecord {
   created_at: string;
   updated_at: string;
   approved_at: string | null;
+  /** Map position for "near me", and how the lookup went. */
+  lat: number | null;
+  lng: number | null;
+  geo_status: 'pending' | 'found' | 'not_found' | 'failed' | 'none';
+  geo_query: string | null;
 }
 
 const COLUMNS =
   'id,slug,title,summary,description,lang,organiser,url,all_day,starts_at,ends_at,start_date,end_date,timezone,' +
   'format,country_code,city,venue,price,captions,sign_language,step_free,quiet_room,hearing_loop,remote_attendance,' +
   'access_notes,status,flags,source,source_id,pending_changes,version,local_start_date,local_end_date,start_instant,' +
-  'end_instant,created_at,updated_at,approved_at,types,cfp_url,cfp_closes_on,topics';
+  'end_instant,created_at,updated_at,approved_at,types,cfp_url,cfp_closes_on,topics,lat,lng,geo_status,geo_query';
 
 export const ADMIN_PAGE_SIZE = 50;
 
@@ -209,4 +214,18 @@ export async function moderate(
     }
   }
   return data as AdminEvent;
+}
+
+/** Asks the background job to find an event's map position again. */
+export async function relocate(id: string): Promise<void> {
+  unwrap(
+    await db()
+      .from('events')
+      .update({ geo_status: 'pending', lat: null, lng: null, geo_query: null, geo_checked_at: null })
+      .eq('id', id)
+      .neq('format', 'online')
+      .select('id'),
+    'supabase',
+    'asking for a new map position',
+  );
 }

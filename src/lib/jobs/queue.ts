@@ -7,7 +7,7 @@
 import { db } from '../db.ts';
 import { ServiceError, unwrap } from '../result.ts';
 
-export type JobKind = 'import' | 'outbox' | 'cleanup' | 'digest' | 'sponsor_expiry' | 'alerts';
+export type JobKind = 'import' | 'outbox' | 'cleanup' | 'digest' | 'sponsor_expiry' | 'alerts' | 'geocode';
 
 export interface Job {
   key: string;

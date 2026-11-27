@@ -10,6 +10,7 @@ import {
   VersionConflict,
   getAdminEvent,
   moderate,
+  relocate,
   saveEvent,
   type ModerationAction,
 } from '../../../lib/admin/events';
@@ -104,6 +105,9 @@ if (form) {
         await moderate(detail, 'reject', sentVersion, rejectReason);
         return Astro.redirect('/admin?done=rejected', 303);
       }
+    } else if (step === 'geocode') {
+      await relocate(detail.event.id);
+      return Astro.redirect(`/admin/events/${detail.event.id}?saved=1`, 303);
     } else if (step === 'approve' || step === 'unpublish' || step === 'cancel' || step === 'restore') {
       await moderate(detail, step, sentVersion);
       return Astro.redirect(
@@ -130,6 +134,13 @@ if (form) {
 const e = detail.event;
 const when = describeWhen(e);
 const published = e.status === 'approved' || e.status === 'cancelled';
+const GEO: Record<string, string> = {
+  pending: 'Waiting to be looked up',
+  found: 'Found',
+  not_found: "Not found, so it won't show in near-me searches. Check the town and country.",
+  failed: 'The lookup failed. It will be tried again within a day.',
+  none: 'Not needed (online)',
+};
 const STATUS: Record<string, string> = {
   pending: 'Waiting for review',
   approved: 'Published',
@@ -239,6 +250,23 @@ const STATUS: Record<string, string> = {
           </dd>
           <dt>Flags</dt>
           <dd>{e.flags.length ? e.flags.join(', ').replace(/_/g, ' ') : 'None'}</dd>
+          {e.format !== 'online' && (
+            <>
+              <dt>Map position</dt>
+              <dd class="flow-tight">
+                <p>
+                  {GEO[e.geo_status]}
+                  {e.geo_status === 'found' && e.geo_query ? ` (from "${e.geo_query}")` : ''}
+                </p>
+                <form method="post">
+                  <input type="hidden" name="step" value="geocode" />
+                  <button type="submit" class="button--secondary">
+                    Look it up again
+                  </button>
+                </form>
+              </dd>
+            </>
+          )}
           {detail.submitter?.rejection_reason && e.status === 'rejected' && (
             <>
               <dt>Rejected because</dt>

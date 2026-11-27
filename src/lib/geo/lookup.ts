@@ -38,7 +38,7 @@ async function reserve(key: string, spacing: number): Promise<number> {
 
 export async function lookupPlace(
   query: string,
-  options: { ip?: string; job?: { deadline: number } } = {},
+  options: { ip?: string; job?: { deadline: number; spacingMs?: number } } = {},
 ): Promise<LookupResult> {
   const key = placeKey(query);
   if (!key) return { ok: true, places: [] };
@@ -60,7 +60,7 @@ export async function lookupPlace(
 
   // The job keeps to 4 a minute; everyone together keeps to 1 a second.
   let startAt = await reserve('nominatim', SPACING_MS);
-  if (options.job) startAt = Math.max(startAt, await reserve('nominatim-job', JOB_SPACING_MS));
+  if (options.job) startAt = Math.max(startAt, await reserve('nominatim-job', options.job.spacingMs ?? JOB_SPACING_MS));
   const wait = startAt - Date.now();
   if (!options.job && wait > MAX_VISITOR_WAIT_MS) return { ok: false, reason: 'busy' };
   if (options.job && startAt > options.job.deadline) return { ok: false, reason: 'busy' };

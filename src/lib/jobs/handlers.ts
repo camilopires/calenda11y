@@ -2,6 +2,7 @@
 import { db } from '../db.ts';
 import { sendOutbox } from '../email/outbox.ts';
 import { runAlerts } from '../alerts/send.ts';
+import { runGeocode } from '../geo/job.ts';
 import { runDigest } from '../digest/send.ts';
 import { runImport } from '../imports/run.ts';
 import type { ImportSource } from '../imports/types.ts';
@@ -25,6 +26,8 @@ registerJobs(async () => {
     // Alerts: instant ones each tick (about every 10 minutes); daily ones checked hourly, sent once a day.
     { key: 'alerts:instant', kind: 'alerts' as const, interval_seconds: 600 },
     { key: 'alerts:daily', kind: 'alerts' as const, interval_seconds: HOUR },
+    // Event positions, at most 4 lookups a minute (OpenStreetMap's limit for scheduled jobs).
+    { key: 'geocode', kind: 'geocode' as const, interval_seconds: 600 },
     ...sources.map((s) => ({ key: `import:${s.id}`, kind: 'import' as const, interval_seconds: 6 * HOUR })),
   ];
 });
@@ -58,6 +61,11 @@ registerHandler('cleanup', async () => {
     number
   >;
   return { finished: true, ok: true, counts: { ...counts, ...digest } };
+});
+
+registerHandler('geocode', async (_job, deadline) => {
+  const r = await runGeocode(deadline);
+  return { finished: r.finished, ok: true, counts: r.counts };
 });
 
 registerHandler('alerts', async (job, deadline) => {

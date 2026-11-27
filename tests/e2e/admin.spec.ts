@@ -312,4 +312,23 @@ test.describe('admin', () => {
     await expect(page.getByText(/Daily, 2033-02-03: finished\. 4 emails queued/)).toBeVisible();
     await service().from('alert_rounds').delete().eq('round_date', '2033-02-03');
   });
+  test("admins see an event's map position, and can ask for it to be looked up again", async ({ page }) => {
+    const id = await insertPendingEvent(`Lost ${uniq()}`, {
+      format: 'in_person',
+      country_code: 'GB',
+      city: 'Atlantis',
+      types: ['meetup'],
+      flags: [],
+    });
+    await service().from('events').update({ geo_status: 'not_found' }).eq('id', id);
+    await signIn(page, await ensureAdmin());
+    await expect(page.locator('tr', { hasText: 'Lost' }).first()).toContainText('No map position');
+    await page.goto(`/admin/events/${id}`);
+    await expect(page.getByText("Not found, so it won't show in near-me searches")).toBeVisible();
+    await page.getByRole('button', { name: 'Look it up again' }).click();
+    await expect(page.getByText('Saved.')).toBeVisible();
+    await expect(page.getByText('Waiting to be looked up')).toBeVisible();
+    const { data } = await service().from('events').select('geo_status').eq('id', id).single();
+    expect(data!.geo_status).toBe('pending');
+  });
 });

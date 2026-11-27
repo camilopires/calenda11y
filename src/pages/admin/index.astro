@@ -111,7 +111,12 @@ const canBulk = view === 'pending' && events.length > 0;
                       : `${e.city ?? ''}${e.country_code ? `, ${countryName(e.country_code)}` : ''}`}
                   </td>
                   <td>{e.source === 'form' ? 'Form' : e.source.toUpperCase()}</td>
-                  <td>{e.flags.length ? e.flags.map((f) => FLAG_LABELS[f] ?? f).join(', ') : 'None'}</td>
+                  <td>
+                    {[
+                      ...e.flags.map((f) => FLAG_LABELS[f] ?? f),
+                      ...(e.geo_status === 'not_found' ? ['No map position'] : []),
+                    ].join(', ') || 'None'}
+                  </td>
                 </tr>
               );
             })}
