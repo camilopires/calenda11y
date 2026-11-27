@@ -75,6 +75,17 @@ where e.slug = t.slug;
 
 update public.events set types = '{talk}' where slug like 'online-a11y-talk-%';
 
+-- Calls for speakers: one closing soon, one open, one with no date (closes
+-- when the event starts) and one already closed.
+update public.events set cfp_url = 'https://example.org/nordic/speak', cfp_closes_on = current_date + 5
+where slug = 'multi-day-a11y-summit';
+update public.events set cfp_url = 'https://example.org/tokyo/speak', cfp_closes_on = current_date + 12
+where slug = 'tokyo-web-accessibility-night';
+update public.events set cfp_url = 'https://example.org/nairobi/speak'
+where slug = 'nairobi-inclusive-tech-day';
+update public.events set cfp_url = 'https://example.org/wcag22/speak', cfp_closes_on = current_date - 3
+where slug = 'wcag-22-in-practice';
+
 insert into public.events_private (event_id, submitter_email, submitter_name)
 select id, 'organiser+' || slug || '@example.org', 'Seed organiser'
 from public.events;

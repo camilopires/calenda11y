@@ -94,6 +94,13 @@ export interface PublicEvent {
   approved_at: string | null;
   cancelled_at: string | null;
   updated_at: string;
+  /** Call for speakers: where to apply, and the last day typed in. */
+  cfp_url: string | null;
+  cfp_closes_on: string | null;
+  /** The real deadline (worked out by the database): an instant, its local day, and whether the event's start capped it. */
+  cfp_closes_at: string | null;
+  cfp_last_day: string | null;
+  cfp_capped: boolean | null;
 }
 
 /** Columns selected from public_events (everything except the search vector). */
@@ -101,7 +108,7 @@ export const PUBLIC_EVENT_COLUMNS =
   'id,slug,title,summary,description,lang,all_day,starts_at,ends_at,start_date,end_date,timezone,' +
   'local_start_date,local_end_date,start_instant,end_instant,format,country_code,city,venue,url,organiser,price,' +
   'captions,sign_language,step_free,quiet_room,hearing_loop,remote_attendance,access_notes,status,sequence,' +
-  'approved_at,cancelled_at,updated_at,types';
+  'approved_at,cancelled_at,updated_at,types,cfp_url,cfp_closes_on,cfp_closes_at,cfp_last_day,cfp_capped';
 
 export function accessProvisions(e: Pick<PublicEvent, AccessProvision>): AccessProvision[] {
   return ACCESS_PROVISIONS.filter((p) => e[p]);

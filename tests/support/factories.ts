@@ -38,6 +38,11 @@ export function makeEvent(overrides: Partial<PublicEvent> = {}): PublicEvent {
     approved_at: '2026-11-20T10:00:00.000Z',
     cancelled_at: null,
     updated_at: '2026-11-20T10:00:00.000Z',
+    cfp_url: null,
+    cfp_closes_on: null,
+    cfp_closes_at: null,
+    cfp_last_day: null,
+    cfp_capped: null,
     ...overrides,
   };
 }
