@@ -7,6 +7,7 @@ import {
   processLogo,
   redeem,
   sessionSponsor,
+  signedInSponsor,
   startSession,
   submitProfile,
   validateProfile,
@@ -18,16 +19,20 @@ import {
 const token = Astro.url.searchParams.get('token');
 if (token && Astro.request.method === 'POST') {
   const id = await redeem('sponsor_profile', token);
-  if (!id) return Astro.redirect('/sponsor/manage?expired=1', 303);
-  startSession(Astro.cookies, id);
+  const fresh = id ? await getSponsor(id) : null;
+  if (!fresh) return Astro.redirect('/sponsor/manage?expired=1', 303);
+  startSession(Astro.cookies, fresh.id, fresh.session_version);
   return Astro.redirect('/sponsor/profile', 303);
 }
 const landing = !!token;
 
-const sponsorId = sessionSponsor(Astro.cookies);
-const sponsor = sponsorId ? await getSponsor(sponsorId) : null;
-// Renew the session on every visit, so it never runs out mid-edit.
-if (sponsor) startSession(Astro.cookies, sponsor.id);
+const session = await signedInSponsor(Astro.cookies);
+let sponsor = session?.sponsor ?? null;
+// A genuine cookie for a sponsor an admin signed out everywhere.
+let signedOut = !session && !!sessionSponsor(Astro.cookies);
+// Renew the session on every visit, so it never runs out mid-edit. It keeps
+// the version it had, so a sign-out can't be undone by renewing.
+if (session) startSession(Astro.cookies, session.sponsor.id, session.version);
 let values: ProfileValues = {
   name: sponsor?.name ?? '',
   url: sponsor?.url ?? '',
@@ -56,8 +61,11 @@ if (sponsor && Astro.request.method === 'POST') {
     else errors.logo = r.error;
   }
   if (!Object.keys(errors).length) {
-    await submitProfile(sponsor, values, webp);
-    saved = true;
+    if (await submitProfile(sponsor, values, webp, session!.version)) saved = true;
+    else {
+      sponsor = null;
+      signedOut = true;
+    }
   }
 }
 const welcome = Astro.url.searchParams.get('welcome') === '1';
@@ -77,6 +85,14 @@ const welcome = Astro.url.searchParams.get('welcome') === '1';
       <form method="post" action={`/sponsor/profile?token=${encodeURIComponent(token ?? '')}`}>
         <button type="submit">Open my sponsor profile</button>
       </form>
+    </div>
+  ) : signedOut ? (
+    <div class="notice notice--error flow-tight" tabindex="-1" data-focus-on-load>
+      <h1>You've been signed out</h1>
+      <p>For your security, you've been signed out of your sponsor profile on every device. Nothing was saved.</p>
+      <p>
+        <a href="/sponsor/manage">Get a new link by email</a>
+      </p>
     </div>
   ) : !sponsor ? (
     <div class="notice notice--error flow-tight">

@@ -6,7 +6,7 @@ import { safeEqual, sha256 } from '../../lib/security/tokens';
 import { payments, type CheckoutSession } from '../../lib/services/payments';
 import { clearSponsorCache } from '../../lib/sponsors/public';
 import { applyPlan, planFromSession } from '../../lib/sponsors/sync';
-import { startSession } from '../../lib/sponsors/profile';
+import { getSponsor, startSession } from '../../lib/sponsors/profile';
 
 const ATTEMPT_COOKIE = 'sponsor_attempt';
 const sessionId = Astro.url.searchParams.get('session_id') ?? '';
@@ -54,10 +54,11 @@ if (session && paid) {
         'claiming attempt',
       );
       const sponsorId = (claimed as { sponsor_id: string | null } | null)?.sponsor_id;
-      if (sponsorId) {
+      const paidSponsor = sponsorId ? await getSponsor(sponsorId) : null;
+      if (paidSponsor) {
         // This browser paid, so sign it straight in to its profile.
         Astro.cookies.delete(ATTEMPT_COOKIE, { path: '/sponsor' });
-        startSession(Astro.cookies, sponsorId);
+        startSession(Astro.cookies, paidSponsor.id, paidSponsor.session_version);
         return Astro.redirect('/sponsor/profile?welcome=1', 303);
       }
     }

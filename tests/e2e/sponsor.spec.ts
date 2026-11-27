@@ -78,6 +78,28 @@ test.describe('sponsorship', () => {
     await expectNoAxeViolations(page, '/sponsor with sponsors');
   });
 
+  test('an admin can sign a sponsor out everywhere, even mid-edit', async ({ page, browser, baseURL }) => {
+    const email = `signout-${uniq()}@example.test`;
+    await checkout(page, /^Make a one-off donation$/, { email });
+    await expect(page).toHaveURL(/\/sponsor\/profile/);
+    await page.getByLabel('Name to show').fill('Should not be saved');
+
+    const admin = await (await browser.newContext({ baseURL: baseURL! })).newPage();
+    await ownIp(admin);
+    await signIn(admin, await ensureAdmin(), '/admin/sponsors');
+    await admin.getByRole('button', { name: new RegExp(`^Sign out everywhere\\s?: ${email}$`) }).click();
+    await expect(admin.getByText(`Signed out ${email} everywhere.`)).toBeVisible();
+    await expectNoAxeViolations(admin, 'admin sponsors after sign-out');
+
+    // The form open before the sign-out can't save any more.
+    await page.getByRole('button', { name: 'Save profile' }).click();
+    await expect(page.getByRole('heading', { name: "You've been signed out" })).toBeVisible();
+    const { data } = await service().from('sponsors').select('name').eq('contact_email', email).single();
+    expect(data!.name).not.toBe('Should not be saved');
+    await page.goto('/sponsor/profile');
+    await expect(page.getByRole('heading', { name: "You've been signed out" })).toBeVisible();
+  });
+
   test('a fake image is refused', async ({ page }) => {
     await checkout(page, /^Sponsor as Supporter$/);
     await page.getByLabel('Name to show').fill('Sneaky');

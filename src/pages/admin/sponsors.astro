@@ -9,6 +9,8 @@ import { clearSponsorCache } from '../../lib/sponsors/public';
 import { TIERS, formatPounds } from '../../lib/sponsors/tiers';
 
 const guard = await requireAdmin(Astro, { keepDraft: true });
+const sponsorLabel = (s: Pick<SponsorRow, 'approved_name' | 'name' | 'contact_email'>) =>
+  s.approved_name ?? s.name ?? s.contact_email ?? 'A sponsor with no profile yet';
 if (!guard.ok) return guard.response;
 
 let message = '';
@@ -22,7 +24,17 @@ if (guard.form) {
   const sponsor = await getSponsor(String(guard.form.get('sponsor') ?? ''));
   const step = String(guard.form.get('step') ?? '');
   const reviewed = String(guard.form.get('reviewed') ?? '');
-  if (sponsor && sponsor.profile_status === 'pending') {
+  if (sponsor && step === 'sign_out') {
+    // Works for every sponsor, whatever state their profile is in.
+    const version = unwrap(
+      await db().rpc('sign_out_sponsor', { p_id: sponsor.id }),
+      'supabase',
+      'signing sponsor out',
+    ) as number | null;
+    message = version
+      ? `Signed out ${sponsorLabel(sponsor)} everywhere. They can sign in again with a new link by email.`
+      : `Couldn't find that sponsor, so nobody was signed out.`;
+  } else if (sponsor && sponsor.profile_status === 'pending') {
     if (sponsor.updated_at !== reviewed) {
       message = `${sponsor.name} changed their profile while you were looking. Check the new version below.`;
     } else if (step === 'approve') {
@@ -154,14 +166,20 @@ const logos = new Map(
   ) : (
     <ul>
       {sponsors.map((s) => (
-        <li>
-          {s.approved_name ?? s.name ?? s.contact_email ?? 'No profile yet'}:{' '}
+        <li class="flow-tight">
+          {sponsorLabel(s)}:{' '}
           {s.sponsorships
             .map(
               (p) =>
                 `${p.kind === 'one_off' ? 'donation' : `${TIERS[p.tier as keyof typeof TIERS]?.name ?? p.tier} (${p.billing_interval}ly)`} ${p.amount_minor ? formatPounds(p.amount_minor) : ''}, ${p.kind === 'one_off' ? (p.paid ? 'paid' : 'not paid') : p.stripe_status}`,
             )
             .join('; ')}
+          <form method="post">
+            <input type="hidden" name="sponsor" value={s.id} />
+            <button type="submit" name="step" value="sign_out" class="button--secondary">
+              Sign out everywhere<span class="visually-hidden">: {sponsorLabel(s)}</span>
+            </button>
+          </form>
         </li>
       ))}
     </ul>

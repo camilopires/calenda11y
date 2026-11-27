@@ -16,10 +16,17 @@ const SESSION_HOURS = 24 * 30;
 export const MAX_LOGO_BYTES = 1024 * 1024;
 export const MAX_LOGO_PIXELS = 2000;
 
-/** After a one-time link is used, a signed cookie lets the sponsor edit their profile. */
-export function startSession(cookies: AstroCookies, sponsorId: string): void {
+/**
+ * After a one-time link is used, a signed cookie lets the sponsor edit their
+ * profile. It carries the sponsor's session version: an admin can bump that
+ * to sign the sponsor out everywhere. A fresh sign-in uses the current
+ * version; renewing keeps the version the cookie already had, so a signed-out
+ * browser can't renew itself back in.
+ */
+export function startSession(cookies: AstroCookies, sponsorId: string, version: number): void {
   const exp = Date.now() + SESSION_HOURS * 3600_000;
-  cookies.set(SESSION_COOKIE, `${sponsorId}.${exp}.${hmac('sponsor-session', `${sponsorId}:${exp}`)}`, {
+  const sig = hmac('sponsor-session', `${sponsorId}:${version}:${exp}`);
+  cookies.set(SESSION_COOKIE, `${sponsorId}.${version}.${exp}.${sig}`, {
     path: '/sponsor',
     httpOnly: true,
     sameSite: 'lax',
@@ -28,12 +35,23 @@ export function startSession(cookies: AstroCookies, sponsorId: string): void {
   });
 }
 
-export function sessionSponsor(cookies: AstroCookies): string | null {
-  const m = /^([0-9a-f-]{36})\.(\d+)\.([A-Za-z0-9_-]+)$/.exec(cookies.get(SESSION_COOKIE)?.value ?? '');
+/** The sponsor and session version the cookie was signed for, if it's genuine and unexpired. */
+export function sessionSponsor(cookies: AstroCookies): { id: string; version: number } | null {
+  const m = /^([0-9a-f-]{36})\.(\d{1,9})\.(\d+)\.([A-Za-z0-9_-]+)$/.exec(cookies.get(SESSION_COOKIE)?.value ?? '');
   if (!m) return null;
-  const [, id, exp, sig] = m;
+  const [, id, version, exp, sig] = m;
   if (Number(exp) < Date.now()) return null;
-  return safeEqual(sig!, hmac('sponsor-session', `${id}:${exp}`)) ? id! : null;
+  return safeEqual(sig!, hmac('sponsor-session', `${id}:${version}:${exp}`))
+    ? { id: id!, version: Number(version) }
+    : null;
+}
+
+/** The signed-in sponsor, if the cookie is valid and they haven't been signed out since. */
+export async function signedInSponsor(cookies: AstroCookies): Promise<{ sponsor: SponsorRow; version: number } | null> {
+  const session = sessionSponsor(cookies);
+  if (!session) return null;
+  const sponsor = await getSponsor(session.id);
+  return sponsor && sponsor.session_version === session.version ? { sponsor, version: session.version } : null;
 }
 
 /** Uses a one-time profile or portal token. */
@@ -62,10 +80,12 @@ export interface SponsorRow {
   approved_logo_alt: string | null;
   /** Changes on every profile edit; used to approve exactly what was reviewed. */
   updated_at: string;
+  /** Bumped to sign the sponsor out everywhere. */
+  session_version: number;
 }
 
 const COLS =
-  'id,stripe_customer_id,contact_email,name,url,logo_alt,staged_logo_path,profile_status,rejection_reason,approved_name,approved_url,approved_logo_path,approved_logo_alt,updated_at';
+  'id,stripe_customer_id,contact_email,name,url,logo_alt,staged_logo_path,profile_status,rejection_reason,approved_name,approved_url,approved_logo_path,approved_logo_alt,updated_at,session_version';
 
 export async function getSponsor(id: string): Promise<SponsorRow | null> {
   return unwrapMaybe(
@@ -122,8 +142,17 @@ export async function processLogo(file: File): Promise<LogoResult> {
   return { ok: true, webp };
 }
 
-/** Saves a submitted profile for review. A new logo goes to the private staging bucket under a new name. */
-export async function submitProfile(sponsor: SponsorRow, v: ProfileValues, logo: Buffer | null): Promise<void> {
+/**
+ * Saves a submitted profile for review. A new logo goes to the private
+ * staging bucket under a new name. Returns false (nothing saved) if the
+ * sponsor was signed out since the session was checked.
+ */
+export async function submitProfile(
+  sponsor: SponsorRow,
+  v: ProfileValues,
+  logo: Buffer | null,
+  sessionVersion: number,
+): Promise<boolean> {
   let staged = v.remove_logo ? null : sponsor.staged_logo_path;
   if (logo) {
     staged = `${sponsor.id}/${randomUUID()}.webp`;
@@ -132,7 +161,7 @@ export async function submitProfile(sponsor: SponsorRow, v: ProfileValues, logo:
       .upload(staged, logo, { contentType: 'image/webp', upsert: false });
     if (up.error) throw new ServiceError('storage', `uploading logo: ${up.error.message}`);
   }
-  unwrap(
+  const saved = unwrap(
     await db()
       .from('sponsors')
       .update({
@@ -145,10 +174,15 @@ export async function submitProfile(sponsor: SponsorRow, v: ProfileValues, logo:
         updated_at: new Date().toISOString(),
       })
       .eq('id', sponsor.id)
+      .eq('session_version', sessionVersion)
       .select('id'),
     'supabase',
     'saving profile',
-  );
+  ) as Array<{ id: string }>;
+  if (saved.length) return true;
+  // Signed out meanwhile: the new logo isn't used, so don't keep it.
+  if (logo && staged) await db().storage.from('sponsor-staging').remove([staged]);
+  return false;
 }
 
 /**
