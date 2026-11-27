@@ -1123,3 +1123,9 @@ legend.label {
 .filters__grid--pair {
   align-items: end;
 }
+
+.admin-logo {
+  max-block-size: 5rem;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+}

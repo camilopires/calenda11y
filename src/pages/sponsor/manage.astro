@@ -1,0 +1,105 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ErrorSummary from '../../components/ErrorSummary.astro';
+import Field from '../../components/Field.astro';
+import { db } from '../../lib/db';
+import { env } from '../../lib/env';
+import { queued, sendNow } from '../../lib/email/outbox';
+import { sponsorLinks } from '../../lib/email/templates';
+import { isEmail } from '../../lib/forms/event';
+import { unwrap, unwrapMaybe } from '../../lib/result';
+import { LIMITS, allow, clientIp } from '../../lib/security/ratelimit';
+import { randomToken, sha256 } from '../../lib/security/tokens';
+
+let email = '';
+let errors: Record<string, string> = {};
+let sent = false;
+const expired = Astro.url.searchParams.get('expired') === '1';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  email = String(form.get('email') ?? '').trim();
+  if (!isEmail(email)) errors = { email: 'Enter an email address in the right format, like name@example.com' };
+  else {
+    sent = true;
+    const ipOk = await allow(LIMITS.subscribePerIp, clientIp(Astro.request, Astro.clientAddress));
+    const recipientOk = ipOk && (await allow(LIMITS.emailPerRecipient, `sponsor:${email.toLowerCase()}`));
+    const sponsor = recipientOk
+      ? (unwrapMaybe(
+          await db().from('sponsors').select('id').eq('contact_email', email).maybeSingle(),
+          'supabase',
+          'finding sponsor',
+        ) as { id: string } | null)
+      : null;
+    // The same answer either way, so this can't be used to find out who sponsors.
+    if (sponsor) {
+      const profile = randomToken();
+      const portal = randomToken();
+      const expires = new Date(Date.now() + 86_400_000).toISOString();
+      unwrap(
+        await db()
+          .from('tokens')
+          .insert([
+            { purpose: 'sponsor_profile', subject_id: sponsor.id, hash: sha256(profile), expires_at: expires },
+            { purpose: 'sponsor_portal', subject_id: sponsor.id, hash: sha256(portal), expires_at: expires },
+          ])
+          .select('id'),
+        'supabase',
+        'saving links',
+      );
+      const site = env().SITE_URL;
+      const key = `sponsor:links:${sponsor.id}:${sha256(profile).slice(0, 12)}`;
+      unwrap(
+        await db().rpc('enqueue_emails', {
+          p_emails: [
+            queued(
+              'sponsor_links',
+              key,
+              email,
+              sponsorLinks(`${site}/sponsor/profile?token=${profile}`, `${site}/api/sponsor/portal?token=${portal}`),
+            ),
+          ],
+        }),
+        'supabase',
+        'queueing links',
+      );
+      await sendNow(key);
+    }
+  }
+}
+---
+
+<BaseLayout title="Manage your sponsorship" nav="sponsor" breadcrumbs={[{ href: '/sponsor', label: 'Sponsor' }]}>
+  <div class="page-head">
+    <h1>Manage your sponsorship</h1>
+    <p class="lede">We'll email you links to change your profile, update payments, get receipts or cancel.</p>
+  </div>
+  {expired && !sent && (
+    <div class="notice notice--important" role="status">
+      <p>That link has expired or was already used. Ask for a new one below.</p>
+    </div>
+  )}
+  {sent ? (
+    <div class="notice notice--success flow-tight" tabindex="-1" data-focus-on-load>
+      <h2>Check your email</h2>
+      <p>If {email} belongs to a sponsor, we've sent links to it. They work once, for 24 hours.</p>
+    </div>
+  ) : (
+    <>
+      <ErrorSummary errors={errors} />
+      <form method="post" class="flow" novalidate>
+        <Field
+          name="email"
+          label="Email address"
+          type="email"
+          value={email}
+          error={errors.email}
+          required
+          autocomplete="email"
+          hint="The address you paid with."
+        />
+        <button type="submit">Email me the links</button>
+      </form>
+    </>
+  )}
+</BaseLayout>

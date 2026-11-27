@@ -1,0 +1,145 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ErrorSummary from '../../components/ErrorSummary.astro';
+import Field from '../../components/Field.astro';
+import {
+  getSponsor,
+  processLogo,
+  redeem,
+  sessionSponsor,
+  startSession,
+  submitProfile,
+  validateProfile,
+  type ProfileValues,
+} from '../../lib/sponsors/profile';
+
+// A one-time link from an email (or the thanks page) starts a 24-hour session.
+const token = Astro.url.searchParams.get('token');
+if (token) {
+  const id = await redeem('sponsor_profile', token);
+  if (!id) return Astro.redirect('/sponsor/manage?expired=1', 303);
+  startSession(Astro.cookies, id);
+  return Astro.redirect(`/sponsor/profile${Astro.url.searchParams.get('welcome') ? '?welcome=1' : ''}`, 303);
+}
+
+const sponsorId = sessionSponsor(Astro.cookies);
+const sponsor = sponsorId ? await getSponsor(sponsorId) : null;
+let values: ProfileValues = {
+  name: sponsor?.name ?? '',
+  url: sponsor?.url ?? '',
+  logo_alt: sponsor?.logo_alt ?? '',
+  remove_logo: false,
+};
+let errors: Record<string, string> = {};
+let saved = false;
+
+if (sponsor && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  values = {
+    name: String(form.get('name') ?? '').trim(),
+    url: String(form.get('url') ?? '').trim(),
+    logo_alt: String(form.get('logo_alt') ?? '').trim(),
+    remove_logo: form.get('remove_logo') === 'on',
+  };
+  const upload = form.get('logo');
+  const file = upload instanceof File && upload.size > 0 ? upload : null;
+  const keepsLogo = !!file || (!!sponsor.staged_logo_path && !values.remove_logo);
+  errors = validateProfile(values, keepsLogo);
+  let webp: Buffer | null = null;
+  if (file) {
+    const r = await processLogo(file);
+    if (r.ok) webp = r.webp;
+    else errors.logo = r.error;
+  }
+  if (!Object.keys(errors).length) {
+    await submitProfile(sponsor, values, webp);
+    saved = true;
+  }
+}
+const welcome = Astro.url.searchParams.get('welcome') === '1';
+---
+
+<BaseLayout title="Your sponsor profile" nav="sponsor" breadcrumbs={[{ href: '/sponsor', label: 'Sponsor' }]} noindex>
+  {!sponsor ? (
+    <div class="notice notice--error flow-tight">
+      <h1>Your link has expired</h1>
+      <p>For your security, profile links work once and only for a while.</p>
+      <p>
+        <a href="/sponsor/manage">Get a new link by email</a>
+      </p>
+    </div>
+  ) : (
+    <>
+      <div class="page-head">
+        <h1>Your sponsor profile</h1>
+        <p class="lede">
+          {welcome ? 'Thank you for sponsoring calenda11y! ' : ''}This is how you'll appear on the sponsors page.
+        </p>
+      </div>
+      {saved && (
+        <div class="notice notice--success" role="status" tabindex="-1" data-focus-on-load>
+          <p>
+            Saved. A person will check your profile before it appears, usually within 2 working days. You can keep
+            changing it until then.
+          </p>
+        </div>
+      )}
+      {!saved && sponsor.profile_status === 'pending' && (
+        <div class="notice">
+          <p>Your profile is waiting to be checked. You can still change it.</p>
+        </div>
+      )}
+      {sponsor.profile_status === 'rejected' && sponsor.rejection_reason && (
+        <div class="notice notice--error">
+          <p>We couldn't publish your last changes: {sponsor.rejection_reason}</p>
+        </div>
+      )}
+      <ErrorSummary errors={errors} />
+      <form method="post" enctype="multipart/form-data" class="flow" novalidate>
+        <Field
+          name="name"
+          label="Name to show"
+          value={values.name}
+          error={errors.name}
+          required
+          autocomplete="organization"
+          maxlength={120}
+        />
+        <Field
+          name="url"
+          label="Website"
+          type="url"
+          value={values.url}
+          error={errors.url}
+          hint="Starting with https://"
+          autocomplete="url"
+        />
+        <Field
+          name="logo"
+          label="Logo"
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          error={errors.logo}
+          hint="Bronze, Silver and Gold sponsors. A PNG, JPEG or WebP image, up to 1 MB."
+        />
+        <Field
+          name="logo_alt"
+          label="Describe the logo"
+          value={values.logo_alt}
+          error={errors.logo_alt}
+          hint="For people who can't see it. Usually just the organisation's name, for example 'Acme Accessibility'."
+          maxlength={200}
+        />
+        {sponsor.staged_logo_path && (
+          <div class="choice">
+            <input type="checkbox" id="f-remove_logo" name="remove_logo" checked={values.remove_logo} />
+            <label for="f-remove_logo">Remove my logo</label>
+          </div>
+        )}
+        <div class="button-row">
+          <button type="submit">Save profile</button>
+        </div>
+      </form>
+    </>
+  )}
+</BaseLayout>

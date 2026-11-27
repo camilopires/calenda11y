@@ -1,0 +1,139 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { TIERS, TIER_ORDER, formatPounds, price } from '../../lib/sponsors/tiers';
+import { publicSponsors } from '../../lib/sponsors/public';
+
+const sponsors = await publicSponsors();
+const byTier = (t: string) => sponsors.filter((s) => s.tier === t);
+const error = Astro.url.searchParams.get('error');
+const cancelled = Astro.url.searchParams.get('cancelled') === '1';
+---
+
+<BaseLayout title="Sponsor calenda11y" nav="sponsor" crumbLabel="Sponsor">
+  <div class="page-head">
+    <h1>Sponsor calenda11y</h1>
+    <p class="lede">
+      calenda11y is free, with no adverts. Sponsors pay for hosting, email and the time it takes to check every event.
+    </p>
+  </div>
+
+  {cancelled && (
+    <div class="notice" role="status" tabindex="-1" data-focus-on-load>
+      <p>You didn't finish paying, so nothing was charged. You can choose again below.</p>
+    </div>
+  )}
+  {error && (
+    <div class="notice notice--error" role="alert" tabindex="-1" data-focus-on-load>
+      <p>
+        {error === 'busy'
+          ? 'There have been a lot of attempts from this connection. Wait an hour and try again.'
+          : 'Choose a sponsorship and how often to pay.'}
+      </p>
+    </div>
+  )}
+
+  <section aria-labelledby="tiers" class="flow">
+    <h2 id="tiers">Sponsor every month or year</h2>
+    <p>
+      Payments are taken by Stripe. You can change or cancel at any time. Sponsors never get special places in the list
+      of events.
+    </p>
+    <ul class="sponsor-tiers">
+      {TIER_ORDER.slice()
+        .reverse()
+        .map((t) => (
+          <li class="tier">
+            <h3>{TIERS[t].name}</h3>
+            <p class="tier__price">
+              {formatPounds(price(t, 'month'))} <span class="small">a month</span>
+            </p>
+            <p>{TIERS[t].description}</p>
+            <form method="post" action="/api/sponsor/checkout" class="flow-tight">
+              <input type="hidden" name="tier" value={t} />
+              <fieldset>
+                <legend class="label">How often to pay</legend>
+                <div class="choice">
+                  <input type="radio" id={`${t}-month`} name="interval" value="month" checked />
+                  <label for={`${t}-month`}>Monthly, {formatPounds(price(t, 'month'))}</label>
+                </div>
+                <div class="choice">
+                  <input type="radio" id={`${t}-year`} name="interval" value="year" />
+                  <label for={`${t}-year`}>Yearly, {formatPounds(price(t, 'year'))} (2 months free)</label>
+                </div>
+              </fieldset>
+              <button type="submit">Sponsor as {TIERS[t].name}</button>
+            </form>
+          </li>
+        ))}
+    </ul>
+  </section>
+
+  <section aria-labelledby="donate" class="flow">
+    <h2 id="donate">Give once</h2>
+    <p>Give any amount from £1. Donors who add a profile are thanked on this page for 12 months.</p>
+    <form method="post" action="/api/sponsor/checkout">
+      <input type="hidden" name="tier" value="donation" />
+      <button type="submit">Make a one-off donation</button>
+    </form>
+    <p class="hint">You choose the amount on the next page, which is run by Stripe.</p>
+  </section>
+
+  <section aria-labelledby="thanks" class="flow">
+    <h2 id="thanks">Thank you to our sponsors</h2>
+    {sponsors.length === 0 ? (
+      <p>You could be the first.</p>
+    ) : (
+      <>
+        {TIER_ORDER.filter((t) => TIERS[t].logo).map((t) =>
+          byTier(t).length ? (
+            <>
+              <h3>{TIERS[t].name}</h3>
+              <ul class:list={['sponsor-logos', { 'sponsor-logos--gold': t === 'gold' }]}>
+                {byTier(t).map((s) => (
+                  <li>
+                    {s.url ? (
+                      <a href={s.url} rel="sponsored">
+                        {s.logoUrl ? <img src={s.logoUrl} alt={s.logoAlt ?? s.name} /> : s.name}
+                      </a>
+                    ) : s.logoUrl ? (
+                      <img src={s.logoUrl} alt={s.logoAlt ?? s.name} />
+                    ) : (
+                      s.name
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null,
+        )}
+        {[...byTier('supporter'), ...byTier('donation')].length > 0 && (
+          <>
+            <h3>Supporters</h3>
+            <ul>
+              {[...byTier('supporter'), ...byTier('donation')].map((s) => (
+                <li>
+                  {s.url ? (
+                    <a href={s.url} rel="sponsored">
+                      {s.name}
+                    </a>
+                  ) : (
+                    s.name
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </>
+    )}
+  </section>
+
+  <section aria-labelledby="already" class="flow">
+    <h2 id="already">Already a sponsor?</h2>
+    <p>
+      <a class="link-standalone" href="/sponsor/manage">
+        Change your profile, payments or receipts
+      </a>
+    </p>
+  </section>
+</BaseLayout>

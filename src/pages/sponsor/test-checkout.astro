@@ -1,0 +1,55 @@
+---
+// Test-only stand-in for Stripe's hosted Checkout page (APP_ENV=test).
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { env } from '../../lib/env';
+import { fakeState } from '../../lib/services/payments';
+
+if (env().APP_ENV !== 'test') return new Response(null, { status: 404 });
+const st = fakeState();
+const id = Astro.url.searchParams.get('session') ?? '';
+const s = st.sessions.get(id);
+if (!s) return new Response('Unknown session', { status: 404 });
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const outcome = String(form.get('outcome') ?? 'paid');
+  const email = String(form.get('email') ?? 'sponsor@example.test');
+  const n = ++st.counter;
+  s.customer = `cus_fake${Date.now()}${n}`;
+  s.customer_email = email;
+  s.status = 'complete';
+  s.payment_status = outcome === 'delayed' ? 'unpaid' : 'paid';
+  s.amount_total = s.mode === 'payment' ? Number(form.get('amount') ?? 1500) : 2500;
+  if (s.mode === 'subscription') {
+    const sub = `sub_fake${Date.now()}${n}`;
+    s.subscription = sub;
+    st.subscriptions.set(sub, {
+      id: sub,
+      status: 'active',
+      customer: s.customer,
+      lookup_key: `c11y_${s.metadata.tier}_${s.metadata.interval}`,
+      period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+      amount: 2500,
+      currency: 'gbp',
+    });
+  }
+  return Astro.redirect(s.metadata.success_url!.replace('{CHECKOUT_SESSION_ID}', s.id), 303);
+}
+---
+
+<BaseLayout title="Test checkout" noindex>
+  <h1>Test checkout</h1>
+  <p>
+    This page stands in for Stripe in tests. Session {s.id}, {s.mode}.
+  </p>
+  <form method="post" class="flow">
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" value="sponsor@example.test" />
+    <label for="outcome">Outcome</label>
+    <select id="outcome" name="outcome">
+      <option value="paid">Paid</option>
+      <option value="delayed">Delayed payment</option>
+    </select>
+    <button type="submit">Pay</button>
+  </form>
+</BaseLayout>

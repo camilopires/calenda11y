@@ -1,14 +1,154 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
+import Field from '../../components/Field.astro';
 import { requireAdmin } from '../../lib/admin/auth';
+import { db } from '../../lib/db';
+import { unwrap } from '../../lib/result';
+import { approveProfile, getSponsor, stagedLogoUrl, type SponsorRow } from '../../lib/sponsors/profile';
+import { clearSponsorCache } from '../../lib/sponsors/public';
+import { TIERS, formatPounds } from '../../lib/sponsors/tiers';
 
 const guard = await requireAdmin(Astro);
 if (!guard.ok) return guard.response;
+
+let message = '';
+const errors: Record<string, string> = {};
+if (guard.form) {
+  const sponsor = await getSponsor(String(guard.form.get('sponsor') ?? ''));
+  const step = String(guard.form.get('step') ?? '');
+  if (sponsor && sponsor.profile_status === 'pending') {
+    if (step === 'approve') {
+      await approveProfile(sponsor);
+      clearSponsorCache();
+      message = `Published the profile for ${sponsor.name}.`;
+    } else if (step === 'reject') {
+      const reason = String(guard.form.get('reason') ?? '').trim();
+      if (!reason) errors[`reason-${sponsor.id}`] = 'Enter why the profile is not being published';
+      else {
+        unwrap(
+          await db()
+            .from('sponsors')
+            .update({ profile_status: 'rejected', rejection_reason: reason.slice(0, 1000) })
+            .eq('id', sponsor.id)
+            .select('id'),
+          'supabase',
+          'rejecting profile',
+        );
+        message = `Didn't publish the changes for ${sponsor.name}. They'll see your reason when they next open their profile.`;
+      }
+    }
+  }
+}
+
+const sponsors = unwrap(
+  await db()
+    .from('sponsors')
+    .select(
+      'id,name,url,logo_alt,staged_logo_path,profile_status,approved_name,contact_email,sponsorships(kind,tier,billing_interval,stripe_status,paid,amount_minor,active_until)',
+    )
+    .order('created_at', { ascending: false })
+    .limit(200),
+  'supabase',
+  'listing sponsors',
+) as unknown as Array<
+  SponsorRow & {
+    sponsorships: Array<{
+      kind: string;
+      tier: string;
+      billing_interval: string | null;
+      stripe_status: string;
+      paid: boolean;
+      amount_minor: number | null;
+      active_until: string | null;
+    }>;
+  }
+>;
+const pendingRaw = sponsors.filter((s) => s.profile_status === 'pending');
+const pending = pendingRaw;
+const logos = new Map(
+  await Promise.all(
+    pending
+      .filter((s) => s.staged_logo_path)
+      .map(async (s) => [s.id, await stagedLogoUrl(s.staged_logo_path!)] as const),
+  ),
+);
 ---
 
 <AdminLayout title="Sponsors" admin={guard.admin} current="sponsors">
   <div class="page-head">
     <h1>Sponsors</h1>
-    <p class="lede">Nothing here yet.</p>
   </div>
+  {message && (
+    <div class="notice notice--success" role="status" tabindex="-1" data-focus-on-load>
+      <p>{message}</p>
+    </div>
+  )}
+
+  <h2>Profiles waiting for review ({pending.length})</h2>
+  {pending.length === 0 ? (
+    <p>None.</p>
+  ) : (
+    <ul class="bare-list flow">
+      {pending.map((s) => (
+        <li class="notice flow-tight">
+          <h3 class="small">{s.name}</h3>
+          <dl class="details-list small">
+            <dt>Website</dt>
+            <dd>{s.url ?? 'None'}</dd>
+            <dt>Logo</dt>
+            <dd>
+              {s.staged_logo_path && logos.get(s.id) ? (
+                <img src={logos.get(s.id)!} alt={`Submitted logo. Its description: ${s.logo_alt}`} class="admin-logo" />
+              ) : (
+                'None'
+              )}
+            </dd>
+            {s.staged_logo_path && (
+              <>
+                <dt>Logo description</dt>
+                <dd>{s.logo_alt}</dd>
+              </>
+            )}
+          </dl>
+          <form method="post" class="flow-tight">
+            <input type="hidden" name="sponsor" value={s.id} />
+            <div class="button-row">
+              <button type="submit" name="step" value="approve">
+                Publish profile<span class="visually-hidden">: {s.name}</span>
+              </button>
+            </div>
+            <Field
+              name={`reason-${s.id}`}
+              label={`Reason, if not publishing ${s.name}`}
+              type="textarea"
+              rows={2}
+              error={errors[`reason-${s.id}`]}
+            />
+            <button type="submit" name="step" value="reject" class="button--secondary">
+              Don't publish<span class="visually-hidden">: {s.name}</span>
+            </button>
+          </form>
+        </li>
+      ))}
+    </ul>
+  )}
+
+  <h2>All sponsors</h2>
+  {sponsors.length === 0 ? (
+    <p>No sponsors yet.</p>
+  ) : (
+    <ul>
+      {sponsors.map((s) => (
+        <li>
+          {s.approved_name ?? s.name ?? s.contact_email ?? 'No profile yet'}:{' '}
+          {s.sponsorships
+            .map(
+              (p) =>
+                `${p.kind === 'one_off' ? 'donation' : `${TIERS[p.tier as keyof typeof TIERS]?.name ?? p.tier} (${p.billing_interval}ly)`} ${p.amount_minor ? formatPounds(p.amount_minor) : ''}, ${p.kind === 'one_off' ? (p.paid ? 'paid' : 'not paid') : p.stripe_status}`,
+            )
+            .join('; ')}
+        </li>
+      ))}
+    </ul>
+  )}
 </AdminLayout>

@@ -9,6 +9,7 @@ import '../styles/base.css';
 import { displayAttributes } from '../lib/display';
 import { LANG, t } from '../i18n/t';
 import SiteFooter from '../components/SiteFooter.astro';
+import { footerSponsors } from '../lib/sponsors/public';
 
 export type NavKey = 'events' | 'calendar' | 'submit' | 'subscribe' | 'sponsor' | 'about' | 'admin' | 'none';
 export interface Crumb {
@@ -54,6 +55,7 @@ const navItems: Array<{ key: NavKey; href: string; label: string }> = [
   { key: 'about', href: '/about', label: t('nav.about') },
 ];
 const path = Astro.url.pathname;
+const sponsorNames = await footerSponsors();
 ---
 
 <!doctype html>
@@ -114,7 +116,7 @@ const path = Astro.url.pathname;
     <main id="main" class="wrap" tabindex="-1">
       <slot />
     </main>
-    <SiteFooter />
+    <SiteFooter sponsorNames={sponsorNames} />
     <script>
       // Moves focus to the first [data-focus-on-load] element (an error
       // summary, a confirmation, or the results after filtering), so

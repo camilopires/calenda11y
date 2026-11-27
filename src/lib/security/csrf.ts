@@ -11,6 +11,8 @@ export const CSRF_EXEMPT_PATHS: ReadonlySet<string> = new Set([
   '/api/resend/webhook',
   '/api/cron/tick',
   '/api/unsubscribe',
+  // Test-only (404 outside APP_ENV=test): lets tests set up the fake Stripe.
+  '/api/test/stripe',
 ]);
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);

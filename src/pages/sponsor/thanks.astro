@@ -1,0 +1,75 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { db } from '../../lib/db';
+import { unwrapMaybe } from '../../lib/result';
+import { safeEqual, sha256 } from '../../lib/security/tokens';
+import { payments, type CheckoutSession } from '../../lib/services/payments';
+import { clearSponsorCache } from '../../lib/sponsors/public';
+import { applyPlan, planFromSession } from '../../lib/sponsors/sync';
+
+const ATTEMPT_COOKIE = 'sponsor_attempt';
+const sessionId = Astro.url.searchParams.get('session_id') ?? '';
+let session: CheckoutSession | null = null;
+if (/^cs_[A-Za-z0-9_]+$/.test(sessionId)) {
+  try {
+    session = await payments().retrieveSession(sessionId);
+  } catch (error) {
+    console.error('[sponsor thanks] could not read the Checkout session', error);
+  }
+}
+
+const paid =
+  session?.status === 'complete' &&
+  (session.payment_status === 'paid' || session.payment_status === 'no_payment_required');
+const processing = session?.status === 'complete' && session.payment_status === 'unpaid';
+
+if (session && paid) {
+  // Save now rather than waiting for the webhook. This is safe to repeat.
+  const plan = planFromSession(session, new Date());
+  await applyPlan(plan);
+  clearSponsorCache();
+
+  // Only the browser that started this Checkout gets the profile link here,
+  // and only once; everyone else is told to check their email.
+  const [attemptId, secret] = (Astro.cookies.get(ATTEMPT_COOKIE)?.value ?? '').split('.');
+  if (plan.action === 'save' && plan.profileToken && attemptId && secret && attemptId === session.client_reference_id) {
+    const claimed = unwrapMaybe(
+      await db()
+        .from('sponsorship_attempts')
+        .update({ used_at: new Date().toISOString() })
+        .eq('id', attemptId)
+        .is('used_at', null)
+        .select('browser_secret_hash')
+        .maybeSingle(),
+      'supabase',
+      'claiming attempt',
+    ) as { browser_secret_hash: string } | null;
+    if (claimed && safeEqual(claimed.browser_secret_hash, sha256(secret))) {
+      Astro.cookies.delete(ATTEMPT_COOKIE, { path: '/sponsor' });
+      return Astro.redirect(`/sponsor/profile?token=${plan.profileToken}&welcome=1`, 303);
+    }
+  }
+}
+---
+
+<BaseLayout title="Thank you" nav="sponsor" breadcrumbs={[{ href: '/sponsor', label: 'Sponsor' }]} noindex>
+  {paid ? (
+    <div class="notice notice--success flow-tight" tabindex="-1" data-focus-on-load>
+      <h1>Thank you for sponsoring calenda11y</h1>
+      <p>We've emailed you a link to set up your sponsor profile. Stripe will email your receipt.</p>
+    </div>
+  ) : processing ? (
+    <div class="notice notice--important flow-tight" tabindex="-1" data-focus-on-load>
+      <h1>Your payment is being processed</h1>
+      <p>Some payment methods take a few days. We'll email you when it's done.</p>
+    </div>
+  ) : (
+    <div class="notice notice--error flow-tight" tabindex="-1" data-focus-on-load>
+      <h1>We couldn't confirm a payment</h1>
+      <p>
+        If you paid, you'll get an email from us shortly. If not, you can{' '}
+        <a href="/sponsor">choose a sponsorship again</a>.
+      </p>
+    </div>
+  )}
+</BaseLayout>

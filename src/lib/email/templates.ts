@@ -130,3 +130,32 @@ export function digestEmail(
     ],
   );
 }
+
+// ---------------------------------------------------------------------------
+// Sponsor emails
+// ---------------------------------------------------------------------------
+
+export function sponsorWelcome(profileLink: string, recurring: boolean): EmailContent {
+  return renderEmail('Thank you for sponsoring calenda11y', 'Thank you for sponsoring calenda11y', [
+    {
+      type: 'p',
+      text: recurring
+        ? 'Your sponsorship has started. Stripe will email you receipts.'
+        : 'Your donation has gone through. Stripe will email you a receipt.',
+    },
+    {
+      type: 'p',
+      text: 'Add your name, website and logo to the sponsors page. A person checks them before they appear.',
+    },
+    { type: 'link', text: 'Set up your sponsor profile', href: profileLink },
+    { type: 'p', text: 'The link works once and lasts 30 days. You can always get a new one from the sponsor page.' },
+  ]);
+}
+
+export function sponsorLinks(profileLink: string, portalLink: string): EmailContent {
+  return renderEmail('Your calenda11y sponsorship', 'Your calenda11y sponsorship', [
+    { type: 'link', text: 'Change your sponsor profile', href: profileLink },
+    { type: 'link', text: 'Manage payments, receipts or cancel', href: portalLink },
+    { type: 'p', text: 'Each link works once and lasts 24 hours. If you did not ask for this, ignore this email.' },
+  ]);
+}
