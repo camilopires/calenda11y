@@ -1129,3 +1129,26 @@ legend.label {
   border: 1px solid var(--c-border);
   background: var(--c-surface);
 }
+
+/* ---------- Target size (2.5.5): links that stand alone ---------- */
+
+/* A link that is the only thing in a list item or heading isn't inside a
+   sentence, so it needs a full 44px target. Inline-block (not flex) so the
+   link's text, and anything inside it, still wraps as normal. */
+main li > a:only-child,
+main dd > a:only-child,
+main :is(h2, h3, th) > a:only-child,
+.month-grid li a {
+  display: inline-block;
+  min-block-size: var(--target-min);
+  padding-block: max(0px, calc((var(--target-min) - 1lh) / 2));
+}
+
+.checkbox-target {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: var(--target-min);
+  min-block-size: var(--target-min);
+  cursor: pointer;
+}

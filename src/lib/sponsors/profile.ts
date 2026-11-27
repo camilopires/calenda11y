@@ -10,11 +10,13 @@ import { ServiceError, unwrap, unwrapMaybe } from '../result.ts';
 import { hmac, safeEqual, sha256 } from '../security/tokens.ts';
 
 export const SESSION_COOKIE = 'sponsor_session';
-const SESSION_HOURS = 24;
+// Long and renewed on every visit, so a sponsor in the middle of editing is
+// never signed out (WCAG 2.2.5). It only grants editing their own profile.
+const SESSION_HOURS = 24 * 30;
 export const MAX_LOGO_BYTES = 1024 * 1024;
 export const MAX_LOGO_PIXELS = 2000;
 
-/** After a one-time link is used, a signed cookie lets the sponsor edit for 24 hours. */
+/** After a one-time link is used, a signed cookie lets the sponsor edit their profile. */
 export function startSession(cookies: AstroCookies, sponsorId: string): void {
   const exp = Date.now() + SESSION_HOURS * 3600_000;
   cookies.set(SESSION_COOKIE, `${sponsorId}.${exp}.${hmac('sponsor-session', `${sponsorId}:${exp}`)}`, {
@@ -58,10 +60,12 @@ export interface SponsorRow {
   approved_url: string | null;
   approved_logo_path: string | null;
   approved_logo_alt: string | null;
+  /** Changes on every profile edit; used to approve exactly what was reviewed. */
+  updated_at: string;
 }
 
 const COLS =
-  'id,stripe_customer_id,contact_email,name,url,logo_alt,staged_logo_path,profile_status,rejection_reason,approved_name,approved_url,approved_logo_path,approved_logo_alt';
+  'id,stripe_customer_id,contact_email,name,url,logo_alt,staged_logo_path,profile_status,rejection_reason,approved_name,approved_url,approved_logo_path,approved_logo_alt,updated_at';
 
 export async function getSponsor(id: string): Promise<SponsorRow | null> {
   return unwrapMaybe(
@@ -147,9 +151,15 @@ export async function submitProfile(sponsor: SponsorRow, v: ProfileValues, logo:
   );
 }
 
-/** Publishes a reviewed profile. The logo is copied to the public bucket under a name never used before. */
-export async function approveProfile(sponsor: SponsorRow): Promise<void> {
-  let publicPath = sponsor.approved_logo_path;
+/**
+ * Publishes a reviewed profile, but only if it hasn't changed since the admin
+ * saw it (`reviewedVersion` is its updated_at then). The logo is copied to
+ * the public bucket under a name never used before. Returns false if the
+ * profile changed, so the admin can look again.
+ */
+export async function approveProfile(sponsor: SponsorRow, reviewedVersion: string): Promise<boolean> {
+  if (sponsor.updated_at !== reviewedVersion) return false;
+  let publicPath: string | null = null;
   if (sponsor.staged_logo_path) {
     const file = await db().storage.from('sponsor-staging').download(sponsor.staged_logo_path);
     if (file.error) throw new ServiceError('storage', `reading staged logo: ${file.error.message}`);
@@ -158,10 +168,8 @@ export async function approveProfile(sponsor: SponsorRow): Promise<void> {
       .storage.from('sponsor-logos')
       .upload(publicPath, Buffer.from(await file.data.arrayBuffer()), { contentType: 'image/webp', upsert: false });
     if (up.error) throw new ServiceError('storage', `publishing logo: ${up.error.message}`);
-  } else {
-    publicPath = null;
   }
-  unwrap(
+  const saved = unwrap(
     await db()
       .from('sponsors')
       .update({
@@ -173,10 +181,15 @@ export async function approveProfile(sponsor: SponsorRow): Promise<void> {
         profile_status: 'approved',
       })
       .eq('id', sponsor.id)
+      .eq('updated_at', reviewedVersion)
       .select('id'),
     'supabase',
     'approving profile',
-  );
+  ) as Array<{ id: string }>;
+  if (saved.length === 1) return true;
+  // The profile changed between reading and saving: don't leave an unused public copy.
+  if (publicPath) await db().storage.from('sponsor-logos').remove([publicPath]);
+  return false;
 }
 
 export function publicLogoUrl(path: string): string {

@@ -72,3 +72,16 @@ export function captcha(): CaptchaVerifier {
   }
   return instance;
 }
+
+/** How long a captcha result carried between form steps is trusted. */
+export const CARRIED_CAPTCHA_MS = 2 * 3600_000;
+
+export interface CarriedCaptcha {
+  result: CaptchaResult;
+  at: number;
+}
+
+/** True if a signed result from an earlier step can stand in for a new check. */
+export function trustCarried(carried: CarriedCaptcha | null | undefined, now = Date.now()): boolean {
+  return carried?.result === 'verified' && now - carried.at >= 0 && now - carried.at < CARRIED_CAPTCHA_MS;
+}

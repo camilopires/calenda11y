@@ -5,7 +5,7 @@
  *  - published → any change to a public field goes into pending_changes for
  *    a person to accept, and the event is flagged "changed"; the public
  *    version stays as it was until then;
- *  - a published event the source cancels is flagged "cancel_requested";
+ *  - an event the source cancels (published or still pending) is flagged "cancel_requested";
  *  - rejected → only the record of what the source said is updated.
  *
  * Changes are detected against what the source said last time
@@ -64,9 +64,10 @@ interface Existing extends Partial<Record<string, unknown>> {
   version: number;
   flags: string[];
   source_snapshot: Fields | null;
+  pending_changes: Partial<Fields> | null;
 }
 
-const SELECT = `id,status,version,flags,source_snapshot,${FIELD_KEYS.join(',')}`;
+const SELECT = `id,status,version,flags,source_snapshot,pending_changes,${FIELD_KEYS.join(',')}`;
 const shortId = () =>
   randomToken(6)
     .toLowerCase()
@@ -110,10 +111,15 @@ export async function upsertImported(sourceId: string, type: SourceType, item: I
       return 'created';
     }
 
-    const sourceChanged = Object.keys(diffFields(existing.source_snapshot, item.fields)).length > 0;
+    // Only what the source itself changed since last time. Fields an admin
+    // edited, and the source didn't touch, are left alone.
+    const sourceChanges = diffFields(existing.source_snapshot, item.fields);
+    const sourceChanged = Object.keys(sourceChanges).length > 0;
     const published = existing.status === 'approved' || existing.status === 'cancelled';
     const newlyCancelled =
-      item.cancelled && existing.status === 'approved' && !existing.flags.includes('cancel_requested');
+      item.cancelled &&
+      (existing.status === 'approved' || existing.status === 'pending') &&
+      !existing.flags.includes('cancel_requested');
     if (!sourceChanged && !newlyCancelled) return 'unchanged';
 
     let update: Record<string, unknown>;
@@ -122,10 +128,22 @@ export async function upsertImported(sourceId: string, type: SourceType, item: I
       update = { source_snapshot: item.fields };
       outcome = 'ignored_rejected';
     } else if (!published) {
-      update = { ...item.fields, source_snapshot: item.fields };
+      // Not public yet, so apply it directly; if the source cancelled it, flag that for the reviewer.
+      update = {
+        ...sourceChanges,
+        source_snapshot: item.fields,
+        ...(item.cancelled &&
+          !existing.flags.includes('cancel_requested') && { flags: addFlag(existing.flags, 'cancel_requested') }),
+      };
       outcome = 'updated';
     } else {
-      const changes = diffFields(existing, item.fields);
+      // Of the source's changes, those that differ from what's published now
+      // (merged with any changes still waiting from earlier runs).
+      const merged: Partial<Record<string, unknown>> = { ...(existing.pending_changes ?? {}), ...sourceChanges };
+      // Drop anything that now matches what's published.
+      const changes = Object.fromEntries(
+        Object.entries(merged).filter(([k, v]) => !same(k, existing[k], v)),
+      ) as Partial<Fields>;
       let flags = existing.flags;
       if (Object.keys(changes).length) flags = addFlag(flags, 'changed');
       if (newlyCancelled) flags = addFlag(flags, 'cancel_requested');

@@ -55,10 +55,11 @@ const dayHref = (date: string) => {
   const p = new URLSearchParams(keep);
   p.set('from', date);
   p.set('to', date);
+  // The grid shows past days too, so the list must include past events.
+  p.set('when', 'any');
   return `/?${p}`;
 };
 const listQs = keep.toString();
-Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
 ---
 
 <BaseLayout title={`Month view: ${formatMonthYear(month)}`} nav="calendar" crumbLabel="Month view">

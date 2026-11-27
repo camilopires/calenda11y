@@ -70,8 +70,15 @@ if (Astro.request.method === 'POST') {
           .from('submission_nonces')
           .insert({ nonce: draft.nonce, purpose: 'subscribe' })
           .select('nonce');
-        if (!nonce.error) await signUp(draft.data.email, draft.data.prefs);
-        else if (nonce.error.code !== '23505') unwrap(nonce, 'supabase', 'saving nonce');
+        if (!nonce.error) {
+          try {
+            await signUp(draft.data.email, draft.data.prefs);
+          } catch (error) {
+            // Give the nonce back, so sending the same page again can finish the job.
+            await db().from('submission_nonces').delete().eq('nonce', draft.nonce);
+            throw error;
+          }
+        } else if (nonce.error.code !== '23505') unwrap(nonce, 'supabase', 'saving nonce');
         email = draft.data.email;
         view = 'done';
       }

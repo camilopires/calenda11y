@@ -8,9 +8,10 @@ import { VersionConflict, getAdminEvent, moderate, saveEvent, type ModerationAct
 import { acceptPendingChanges, discardPendingChanges } from '../../../lib/imports/upsert';
 import { describeWhen } from '../../../lib/events/dates';
 import { readEventForm, recordToForm, validateEvent, type EventFormValues } from '../../../lib/forms/event';
+import { ServiceError } from '../../../lib/result';
 import type { FieldErrors } from '../../../lib/forms/errors';
 
-const guard = await requireAdmin(Astro);
+const guard = await requireAdmin(Astro, { keepDraft: true });
 if (!guard.ok) return guard.response;
 const id = Astro.params.id ?? '';
 let detail = await getAdminEvent(id);
@@ -23,6 +24,7 @@ const general: string[] = [];
 let view: 'detail' | 'reject' = 'detail';
 let rejectReason = '';
 let restored = false;
+let restoredStep = '';
 const saved = Astro.url.searchParams.get('saved') === '1';
 
 const done: Record<ModerationAction, string> = {
@@ -44,25 +46,42 @@ if (form) {
   const step = String(form.get('step') ?? '');
   const sentVersion = Number(form.get('version'));
   try {
-    if (step === 'save' || restored) {
+    if (restored) {
+      restoredStep = step;
+      // Put back what the admin was doing: an edit, or a rejection with its reason.
+      // Nothing is saved until they choose to again.
+      version = Number.isInteger(sentVersion) && sentVersion > 0 ? sentVersion : version;
+      if (step === 'save') values = readEventForm(form);
+      else if (step === 'reject') {
+        view = 'reject';
+        rejectReason = String(form.get('reason') ?? '');
+      }
+    } else if (step === 'save') {
       values = readEventForm(form);
-      if (restored) {
-        version = Number.isInteger(sentVersion) && sentVersion > 0 ? sentVersion : version;
-      } else {
-        const result = validateEvent(values, { now: new Date(), allowPast: true });
-        if (!result.ok) errors = result.errors;
-        else {
-          await saveEvent(detail.event.id, sentVersion, result.record);
-          return Astro.redirect(`/admin/events/${detail.event.id}?saved=1`, 303);
-        }
+      const result = validateEvent(values, { now: new Date(), allowPast: true });
+      if (!result.ok) errors = result.errors;
+      else {
+        await saveEvent(detail.event.id, sentVersion, result.record);
+        return Astro.redirect(`/admin/events/${detail.event.id}?saved=1`, 303);
       }
     } else if (step === 'accept-changes' || step === 'discard-changes') {
-      const ok =
-        step === 'accept-changes'
-          ? await acceptPendingChanges(detail.event.id, sentVersion)
-          : await discardPendingChanges(detail.event.id, sentVersion);
+      let ok: boolean;
+      try {
+        ok =
+          step === 'accept-changes'
+            ? await acceptPendingChanges(detail.event.id, sentVersion)
+            : await discardPendingChanges(detail.event.id, sentVersion);
+      } catch (err) {
+        if (!(err instanceof ServiceError)) throw err;
+        // For example the source's new details break a rule (an end before the start).
+        console.error('[admin] applying source changes failed', err);
+        general.push(
+          `These changes can't be applied as they are (${err.message}). Edit the details below instead, then choose "Keep the current details".`,
+        );
+        ok = true;
+      }
       if (!ok) throw new VersionConflict();
-      return Astro.redirect(`/admin/events/${detail.event.id}?saved=1`, 303);
+      if (!general.length) return Astro.redirect(`/admin/events/${detail.event.id}?saved=1`, 303);
     } else if (step === 'reject-check') {
       view = 'reject';
     } else if (step === 'reject') {
@@ -123,6 +142,14 @@ const STATUS: Record<string, string> = {
           {detail.submitter?.email ? ' We will email the person who added it, with your reason.' : ''}
         </p>
       </div>
+      {restored && (
+        <div class="notice notice--important" role="status" tabindex="-1" data-focus-on-load>
+          <p>
+            You were signed out while rejecting this event, so we kept your reason. Check it, then choose "Reject
+            event".
+          </p>
+        </div>
+      )}
       <ErrorSummary errors={errors} />
       <form method="post" class="flow" novalidate>
         <input type="hidden" name="version" value={version} />
@@ -166,7 +193,7 @@ const STATUS: Record<string, string> = {
           <p>Saved.</p>
         </div>
       )}
-      {restored && (
+      {restoredStep === 'save' && (
         <div class="notice notice--important" role="status" tabindex="-1" data-focus-on-load>
           <p>
             You were signed out while saving, so we kept your changes. They're in the form below. Check them, then

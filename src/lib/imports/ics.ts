@@ -30,7 +30,7 @@ type IEvent = InstanceType<typeof ICAL.Event>;
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const dateOf = (t: ITime) => `${t.year}-${pad(t.month)}-${pad(t.day)}`;
-const timeOf = (t: ITime) => `${pad(t.hour)}:${pad(t.minute)}`;
+const timeOf = (t: ITime) => `${pad(t.hour)}:${pad(t.minute)}:${pad(t.second)}`;
 
 /** The TZID a time was written with, if any. */
 function tzidOf(t: ITime): string | undefined {
@@ -74,7 +74,7 @@ export function toInstant(t: ITime, registered: Set<string>, defaultTz: string, 
   const r = zonedTimeToUtc(dateOf(t), timeOf(t), zone);
   // A time skipped by daylight saving is moved forward an hour, as calendar apps do.
   if (!r.ok) {
-    const later = zonedTimeToUtc(dateOf(t), `${pad(Math.min(t.hour + 1, 23))}:${pad(t.minute)}`, zone);
+    const later = zonedTimeToUtc(dateOf(t), `${pad(Math.min(t.hour + 1, 23))}:${pad(t.minute)}:${pad(t.second)}`, zone);
     return later.ok ? later : { ok: false, reason: 'Its time does not exist in its time zone' };
   }
   return r;
@@ -161,6 +161,7 @@ export function parseIcs(body: string, source: ImportSource, now: Date): FetchPa
 
   const items: RawEvent[] = [];
   const skipped: Skipped[] = [];
+  let truncated = false;
   const earliestEnd = now.getTime() - IMPORT_LIMITS.keepEndedDays * 86_400_000;
   const horizon = now.getTime() + IMPORT_LIMITS.horizonDays * 86_400_000;
 
@@ -189,6 +190,7 @@ export function parseIcs(body: string, source: ImportSource, now: Date): FetchPa
         uid,
         reason: `The feed has more than ${IMPORT_LIMITS.maxItemsPerRun} events; the rest were not read`,
       });
+      truncated = true;
       break;
     }
     if (!event.startDate) {
@@ -201,17 +203,18 @@ export function parseIcs(body: string, source: ImportSource, now: Date): FetchPa
       else if (keep(r)) items.push(r);
       continue;
     }
+    // Expansion starts at the series' first DTSTART, so an old weekly series
+    // walks through its past first. Past occurrences don't count towards the
+    // per-series cap, and a hard ceiling on steps keeps the work bounded.
     const iterator = event.iterator();
-    let count = 0;
+    let kept = 0;
+    let steps = 0;
     for (let next = iterator.next(); next; next = iterator.next()) {
-      if (next.toJSDate().getTime() > horizon) break;
-      if (++count > IMPORT_LIMITS.maxOccurrencesPerSeries) {
-        skipped.push({
-          uid,
-          reason: `It repeats more than ${IMPORT_LIMITS.maxOccurrencesPerSeries} times; later ones were not read`,
-        });
+      if (++steps > IMPORT_LIMITS.maxRecurrenceSteps) {
+        skipped.push({ uid, reason: 'It repeats too often to read in full; later occurrences were not read' });
         break;
       }
+      if (next.toJSDate().getTime() > horizon) break;
       const details = event.getOccurrenceDetails(next);
       // Identify the occurrence by its original start, in UTC, so it stays the same if the occurrence moves.
       const original = details.recurrenceId.isDate
@@ -223,12 +226,26 @@ export function parseIcs(body: string, source: ImportSource, now: Date): FetchPa
       }
       const occurrenceUid = `${uid}#${original.instant.replace(/[-:]/g, '').replace(/\.\d{3}/, '')}`;
       const r = rawFrom(event, details.item, details.startDate, details.endDate, occurrenceUid, registered, source);
-      if (isSkipped(r)) skipped.push(r);
-      else if (keep(r)) items.push(r);
-      if (items.length >= IMPORT_LIMITS.maxItemsPerRun) break;
+      if (isSkipped(r)) {
+        skipped.push(r);
+        continue;
+      }
+      if (!keep(r)) continue;
+      if (++kept > IMPORT_LIMITS.maxOccurrencesPerSeries) {
+        skipped.push({
+          uid,
+          reason: `It repeats more than ${IMPORT_LIMITS.maxOccurrencesPerSeries} times in the next year; later ones were not read`,
+        });
+        break;
+      }
+      items.push(r);
+      if (items.length >= IMPORT_LIMITS.maxItemsPerRun) {
+        truncated = true;
+        break;
+      }
     }
   }
-  return { items, skipped };
+  return { items, skipped, ...(truncated && { truncated }) };
 }
 
 export const icsAdapter: Adapter = {

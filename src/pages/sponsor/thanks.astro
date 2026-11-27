@@ -6,6 +6,7 @@ import { safeEqual, sha256 } from '../../lib/security/tokens';
 import { payments, type CheckoutSession } from '../../lib/services/payments';
 import { clearSponsorCache } from '../../lib/sponsors/public';
 import { applyPlan, planFromSession } from '../../lib/sponsors/sync';
+import { startSession } from '../../lib/sponsors/profile';
 
 const ATTEMPT_COOKIE = 'sponsor_attempt';
 const sessionId = Astro.url.searchParams.get('session_id') ?? '';
@@ -32,21 +33,33 @@ if (session && paid) {
   // Only the browser that started this Checkout gets the profile link here,
   // and only once; everyone else is told to check their email.
   const [attemptId, secret] = (Astro.cookies.get(ATTEMPT_COOKIE)?.value ?? '').split('.');
-  if (plan.action === 'save' && plan.profileToken && attemptId && secret && attemptId === session.client_reference_id) {
-    const claimed = unwrapMaybe(
-      await db()
-        .from('sponsorship_attempts')
-        .update({ used_at: new Date().toISOString() })
-        .eq('id', attemptId)
-        .is('used_at', null)
-        .select('browser_secret_hash')
-        .maybeSingle(),
+  if (plan.action === 'save' && attemptId && secret && attemptId === session.client_reference_id) {
+    // Check the browser's secret first, then claim the attempt once. A wrong
+    // cookie can't use up the real payer's link.
+    const attempt = unwrapMaybe(
+      await db().from('sponsorship_attempts').select('browser_secret_hash,used_at').eq('id', attemptId).maybeSingle(),
       'supabase',
-      'claiming attempt',
-    ) as { browser_secret_hash: string } | null;
-    if (claimed && safeEqual(claimed.browser_secret_hash, sha256(secret))) {
-      Astro.cookies.delete(ATTEMPT_COOKIE, { path: '/sponsor' });
-      return Astro.redirect(`/sponsor/profile?token=${plan.profileToken}&welcome=1`, 303);
+      'reading attempt',
+    ) as { browser_secret_hash: string; used_at: string | null } | null;
+    if (attempt && !attempt.used_at && safeEqual(attempt.browser_secret_hash, sha256(secret))) {
+      const claimed = unwrapMaybe(
+        await db()
+          .from('sponsorship_attempts')
+          .update({ used_at: new Date().toISOString() })
+          .eq('id', attemptId)
+          .is('used_at', null)
+          .select('id,sponsor_id')
+          .maybeSingle(),
+        'supabase',
+        'claiming attempt',
+      );
+      const sponsorId = (claimed as { sponsor_id: string | null } | null)?.sponsor_id;
+      if (sponsorId) {
+        // This browser paid, so sign it straight in to its profile.
+        Astro.cookies.delete(ATTEMPT_COOKIE, { path: '/sponsor' });
+        startSession(Astro.cookies, sponsorId);
+        return Astro.redirect('/sponsor/profile?welcome=1', 303);
+      }
     }
   }
 }

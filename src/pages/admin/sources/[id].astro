@@ -8,7 +8,7 @@ import { db } from '../../../lib/db';
 import { configToForm, readSourceForm, validateSource } from '../../../lib/imports/sourceForm';
 import { unwrap } from '../../../lib/result';
 
-const guard = await requireAdmin(Astro);
+const guard = await requireAdmin(Astro, { keepDraft: true });
 if (!guard.ok) return guard.response;
 const source = await getSource(Astro.params.id ?? '');
 if (!source) return Astro.rewrite('/404');

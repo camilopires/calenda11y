@@ -7,7 +7,7 @@ import { env } from '../../lib/env';
 import { queued, sendNow } from '../../lib/email/outbox';
 import { sponsorLinks } from '../../lib/email/templates';
 import { isEmail } from '../../lib/forms/event';
-import { unwrap, unwrapMaybe } from '../../lib/result';
+import { unwrap } from '../../lib/result';
 import { LIMITS, allow, clientIp } from '../../lib/security/ratelimit';
 import { randomToken, sha256 } from '../../lib/security/tokens';
 
@@ -24,18 +24,21 @@ if (Astro.request.method === 'POST') {
     sent = true;
     const ipOk = await allow(LIMITS.subscribePerIp, clientIp(Astro.request, Astro.clientAddress));
     const recipientOk = ipOk && (await allow(LIMITS.emailPerRecipient, `sponsor:${email.toLowerCase()}`));
-    const sponsor = recipientOk
-      ? (unwrapMaybe(
-          await db().from('sponsors').select('id').eq('contact_email', email).maybeSingle(),
+    // Someone who paid more than once can have several sponsor records (one
+    // per Stripe customer): send links for each.
+    const sponsors = recipientOk
+      ? (unwrap(
+          await db().from('sponsors').select('id').eq('contact_email', email).limit(10),
           'supabase',
-          'finding sponsor',
-        ) as { id: string } | null)
-      : null;
+          'finding sponsors',
+        ) as Array<{ id: string }>)
+      : [];
     // The same answer either way, so this can't be used to find out who sponsors.
-    if (sponsor) {
+    const site = env().SITE_URL;
+    const expires = new Date(Date.now() + 86_400_000).toISOString();
+    for (const sponsor of sponsors) {
       const profile = randomToken();
       const portal = randomToken();
-      const expires = new Date(Date.now() + 86_400_000).toISOString();
       unwrap(
         await db()
           .from('tokens')
@@ -47,7 +50,6 @@ if (Astro.request.method === 'POST') {
         'supabase',
         'saving links',
       );
-      const site = env().SITE_URL;
       const key = `sponsor:links:${sponsor.id}:${sha256(profile).slice(0, 12)}`;
       unwrap(
         await db().rpc('enqueue_emails', {
@@ -56,7 +58,7 @@ if (Astro.request.method === 'POST') {
               'sponsor_links',
               key,
               email,
-              sponsorLinks(`${site}/sponsor/profile?token=${profile}`, `${site}/api/sponsor/portal?token=${portal}`),
+              sponsorLinks(`${site}/sponsor/profile?token=${profile}`, `${site}/sponsor/portal?token=${portal}`),
             ),
           ],
         }),

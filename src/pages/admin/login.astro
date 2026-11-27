@@ -9,6 +9,7 @@ import { LIMITS, allow, clientIp } from '../../lib/security/ratelimit';
 
 const next = safeNext(Astro.url.searchParams.get('next'));
 const expired = Astro.url.searchParams.get('expired') === '1';
+const signedOutWhileSending = Astro.url.searchParams.get('signed_out_while_sending') === '1';
 const linkProblem = Astro.url.searchParams.get('error') === 'link';
 const signedOut = Astro.url.searchParams.get('signed_out') === '1';
 let email = '';
@@ -43,6 +44,11 @@ if (Astro.request.method === 'POST') {
   {expired && (
     <div class="notice notice--important" role="status">
       <p>You were signed out. Sign in again and we'll bring back what you were working on.</p>
+    </div>
+  )}
+  {signedOutWhileSending && (
+    <div class="notice notice--important" role="status">
+      <p>You were signed out, so that wasn't done. Sign in again, then try it once more.</p>
     </div>
   )}
   {linkProblem && (

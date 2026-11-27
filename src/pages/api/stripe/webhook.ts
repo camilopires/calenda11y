@@ -41,11 +41,14 @@ export const POST: APIRoute = async ({ request }) => {
   const object = event.data.object as { id?: string };
   try {
     let outcome: string = 'ignored';
-    const now = new Date();
+    // The time is taken after fetching, so whichever request saw the later
+    // state at Stripe also has the later timestamp, and wins.
     if (SESSION_EVENTS.has(event.type) && object.id) {
-      outcome = await applyPlan(planFromSession(await payments().retrieveSession(object.id), now), event);
+      const session = await payments().retrieveSession(object.id);
+      outcome = await applyPlan(planFromSession(session, new Date()), event);
     } else if (SUBSCRIPTION_EVENTS.has(event.type) && object.id) {
-      outcome = await applyPlan(planFromSubscription(await payments().retrieveSubscription(object.id), now), event);
+      const subscription = await payments().retrieveSubscription(object.id);
+      outcome = await applyPlan(planFromSubscription(subscription, new Date()), event);
     }
     if (outcome === 'applied') clearSponsorCache();
     return new Response(JSON.stringify({ outcome }), { status: 200, headers: { 'Content-Type': 'application/json' } });

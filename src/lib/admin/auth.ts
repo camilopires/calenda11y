@@ -13,12 +13,17 @@ import type { AstroCookies } from 'astro';
 import { anonKey, db } from '../db.ts';
 import { env } from '../env.ts';
 import { unwrapMaybe } from '../result.ts';
+import { LIMITS, allow, clientIp } from '../security/ratelimit.ts';
 
 interface Ctx {
   request: Request;
   cookies: AstroCookies;
   url: URL;
+  clientAddress?: string;
 }
+
+/** Drafts bigger than this aren't kept (admin forms are far smaller). */
+export const MAX_DRAFT_BYTES = 100_000;
 
 export function authClient(ctx: Pick<Ctx, 'request' | 'cookies'>) {
   const secure = env().APP_ENV === 'production';
@@ -82,16 +87,28 @@ export async function isAdmin(userId: string): Promise<boolean> {
   return row !== null;
 }
 
-/** Call first in every admin page and endpoint. On POST it also reads the form, since a body can only be read once. */
-export async function requireAdmin(ctx: Ctx): Promise<Guard> {
+/**
+ * Call first in every admin page and endpoint. On POST it also reads the
+ * form, since a body can only be read once. Pages whose forms hold typed
+ * input pass `keepDraft: true` and restore it with takeDraft() after sign-in.
+ */
+export async function requireAdmin(ctx: Ctx, options: { keepDraft?: boolean } = {}): Promise<Guard> {
   const form = ctx.request.method === 'POST' ? await ctx.request.formData() : null;
   const { data, error } = await authClient(ctx).auth.getUser();
   const user = error ? null : data.user;
   const path = ctx.url.pathname + ctx.url.search;
 
   if (!user) {
-    if (form && NEXT.test(ctx.url.pathname)) {
-      const values = formToValues(form);
+    const values = form ? formToValues(form) : null;
+    // Anyone can send a POST here, so drafts are capped in size and number.
+    const keep =
+      options.keepDraft &&
+      values &&
+      NEXT.test(ctx.url.pathname) &&
+      JSON.stringify(values).length <= MAX_DRAFT_BYTES &&
+      (await allow(LIMITS.adminDraftPerIp, clientIp(ctx.request, ctx.clientAddress)));
+    let kept = false;
+    if (keep && values) {
       const saved = unwrapMaybe(
         await db().from('admin_drafts').insert({ path: ctx.url.pathname, payload: values }).select('id').single(),
         'supabase',
@@ -105,9 +122,11 @@ export async function requireAdmin(ctx: Ctx): Promise<Guard> {
           secure: env().APP_ENV === 'production',
           maxAge: 86_400,
         });
+        kept = true;
       }
     }
-    const reason = form ? '&expired=1' : '';
+    // Only promise to bring work back when there's a draft to bring back.
+    const reason = kept ? '&expired=1' : form ? '&signed_out_while_sending=1' : '';
     return {
       ok: false,
       response: new Response(null, {

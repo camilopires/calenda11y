@@ -260,3 +260,44 @@ describe('email outbox', () => {
     expect(row.data!.status).toBe('unknown');
   });
 });
+
+describe('review regressions: outbox', () => {
+  it('marks a re-queued email unknown once its first attempt is over 24 hours old', async () => {
+    const [id] = (await db.rpc('enqueue_emails', { p_emails: [email(uniq())] })).data as string[];
+    await db
+      .from('email_outbox')
+      .update({
+        status: 'queued',
+        attempts: 1,
+        first_sent_attempt_at: new Date(Date.now() - 25 * 3600_000).toISOString(),
+      })
+      .eq('id', id!);
+    const claimed = await db.rpc('claim_outbox', { p_limit: 5, p_lease_seconds: 60, p_ids: [id] });
+    expect(claimed.data).toHaveLength(0);
+    expect((await db.from('email_outbox').select('status').eq('id', id!).single()).data!.status).toBe('unknown');
+  });
+
+  it('a sender that lost its lease cannot overwrite the new owner', async () => {
+    const { sendOutbox } = await import('../../src/lib/email/outbox.ts');
+    const { setMailer } = await import('../../src/lib/services/mailer.ts');
+    const [id] = (await db.rpc('enqueue_emails', { p_emails: [email(uniq())] })).data as string[];
+    setMailer({
+      send: async () => {
+        // While "sending", the lease expires and another sender claims it.
+        await db
+          .from('email_outbox')
+          .update({ lease_until: new Date(Date.now() - 1000).toISOString() })
+          .eq('id', id!);
+        await db.rpc('claim_outbox', { p_limit: 1, p_lease_seconds: 60, p_ids: [id] });
+        return { id: 'provider-1' };
+      },
+    });
+    try {
+      const summary = await sendOutbox({ ids: [id!] });
+      expect(summary).toMatchObject({ sent: 0, lost_lease: 1 });
+      expect((await db.from('email_outbox').select('status').eq('id', id!).single()).data!.status).toBe('sending');
+    } finally {
+      setMailer(undefined);
+    }
+  });
+});

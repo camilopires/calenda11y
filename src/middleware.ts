@@ -26,6 +26,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
     for (const [name, value] of Object.entries(securityHeaders(config.APP_ENV === 'production'))) {
       if (!r.headers.has(name)) r.headers.set(name, value);
     }
+    // Pages are rendered with each visitor's display settings (theme, text
+    // size, spacing), so HTML must never be shared from a cache.
+    if (!r.headers.has('Cache-Control') && (r.headers.get('Content-Type') ?? '').startsWith('text/html')) {
+      r.headers.set('Cache-Control', 'private, no-cache');
+    }
     if (isAdmin) {
       // Admin pages show private data: never cache or index them.
       r.headers.set('Cache-Control', 'private, no-store');

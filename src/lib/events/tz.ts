@@ -57,15 +57,15 @@ export type ZonedResult =
   | { ok: false; reason: 'nonexistent' };
 
 /**
- * Converts `date` (YYYY-MM-DD) and `time` (HH:MM) in `timeZone` to a UTC
+ * Converts `date` (YYYY-MM-DD) and `time` (HH:MM or HH:MM:SS) in `timeZone` to a UTC
  * ISO instant. When clocks go back and a time happens twice, the earlier
  * one is used. A time that doesn't exist (clocks going forward) is reported,
  * not silently moved.
  */
 export function zonedTimeToUtc(date: string, time: string, timeZone: string): ZonedResult {
   const [y, mo, d] = date.split('-').map(Number) as [number, number, number];
-  const [h, mi] = time.split(':').map(Number) as [number, number];
-  const wall = Date.UTC(y, mo - 1, d, h, mi);
+  const [h, mi, sec = 0] = time.split(':').map(Number) as [number, number, number?];
+  const wall = Date.UTC(y, mo - 1, d, h, mi, sec);
   // Candidate instants for each offset in effect around that wall time.
   const offsets = new Set([offsetMinutes(wall - 86_400_000, timeZone), offsetMinutes(wall + 86_400_000, timeZone)]);
   const matches: number[] = [];

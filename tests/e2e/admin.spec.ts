@@ -172,4 +172,33 @@ test.describe('admin', () => {
       await expectNoAxeViolations(page, path);
     }
   });
+
+  test('a rejection reason typed before the session expired comes back too', async ({ page }) => {
+    const id = await submitEvent(page, `Draft reject ${uniq()}`);
+    const admin = await ensureAdmin();
+    await signIn(page, admin, `/admin/events/${id}`);
+    await page.getByRole('button', { name: 'Reject' }).click();
+    await page.getByLabel('Reason').fill('Kept reason');
+    const cookies = await page.context().cookies();
+    await page.context().clearCookies();
+    await page.context().addCookies(cookies.filter((c) => !c.name.startsWith('sb-')));
+    await page.getByRole('button', { name: 'Reject event' }).click();
+    await expect(page).toHaveURL(/\/admin\/login\?next=.*&expired=1$/);
+    await signIn(page, admin, `/admin/events/${id}`);
+    await expect(page.getByText('so we kept your reason')).toBeVisible();
+    await expect(page.getByLabel('Reason')).toHaveValue('Kept reason');
+    // Nothing happened yet: it's still waiting for review.
+    const { data } = await service().from('events').select('status').eq('id', id).single();
+    expect(data!.status).toBe('pending');
+  });
+
+  test('oversized drafts are not kept', async ({ page }) => {
+    const res = await page.request.post('/admin/events/00000000-0000-4000-8000-000000000000', {
+      headers: { origin: 'http://127.0.0.1:4322' },
+      form: { step: 'save', title: 'x'.repeat(200_000) },
+      maxRedirects: 0,
+    });
+    expect(res.status()).toBe(303);
+    expect((await page.context().cookies()).some((c) => c.name === 'admin_draft')).toBe(false);
+  });
 });

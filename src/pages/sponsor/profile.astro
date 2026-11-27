@@ -13,17 +13,21 @@ import {
   type ProfileValues,
 } from '../../lib/sponsors/profile';
 
-// A one-time link from an email (or the thanks page) starts a 24-hour session.
+// A one-time link from an email starts a session, but only when its button is
+// pressed (POST): email security scanners open links on their own.
 const token = Astro.url.searchParams.get('token');
-if (token) {
+if (token && Astro.request.method === 'POST') {
   const id = await redeem('sponsor_profile', token);
   if (!id) return Astro.redirect('/sponsor/manage?expired=1', 303);
   startSession(Astro.cookies, id);
-  return Astro.redirect(`/sponsor/profile${Astro.url.searchParams.get('welcome') ? '?welcome=1' : ''}`, 303);
+  return Astro.redirect('/sponsor/profile', 303);
 }
+const landing = !!token;
 
 const sponsorId = sessionSponsor(Astro.cookies);
 const sponsor = sponsorId ? await getSponsor(sponsorId) : null;
+// Renew the session on every visit, so it never runs out mid-edit.
+if (sponsor) startSession(Astro.cookies, sponsor.id);
 let values: ProfileValues = {
   name: sponsor?.name ?? '',
   url: sponsor?.url ?? '',
@@ -60,10 +64,21 @@ const welcome = Astro.url.searchParams.get('welcome') === '1';
 ---
 
 <BaseLayout title="Your sponsor profile" nav="sponsor" breadcrumbs={[{ href: '/sponsor', label: 'Sponsor' }]} noindex>
-  {!sponsor ? (
+  {landing ? (
+    <div class="page-head flow">
+      <h1>Your sponsor profile</h1>
+      <p class="lede">Open your profile to add or change your name, website and logo.</p>
+      <form method="post" action={`/sponsor/profile?token=${encodeURIComponent(token ?? '')}`}>
+        <button type="submit">Open my sponsor profile</button>
+      </form>
+    </div>
+  ) : !sponsor ? (
     <div class="notice notice--error flow-tight">
       <h1>Your link has expired</h1>
-      <p>For your security, profile links work once and only for a while.</p>
+      <p>
+        For your security, each profile link works once. If you haven't used this site for 30 days, you'll need a new
+        one.
+      </p>
       <p>
         <a href="/sponsor/manage">Get a new link by email</a>
       </p>

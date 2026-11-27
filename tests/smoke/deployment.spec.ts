@@ -17,8 +17,8 @@ test.describe('deployment smoke checks', () => {
     expect(problems).toEqual([]);
   });
 
-  test('public pages are cached at the edge; admin pages are not', async ({ request }) => {
-    expect((await request.get('/')).headers()['cache-control']).toContain('s-maxage=');
+  test('feeds are cached at the edge; pages (which carry display settings) and admin are not', async ({ request }) => {
+    expect((await request.get('/')).headers()['cache-control']).toBe('private, no-cache');
     expect((await request.get('/feeds/all.ics')).headers()['cache-control']).toContain('s-maxage=3600');
     expect((await request.get('/admin/login')).headers()['cache-control']).toBe('private, no-store');
   });

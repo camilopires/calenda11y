@@ -84,13 +84,15 @@ const canBulk = view === 'pending' && events.length > 0;
                 <tr>
                   {canBulk && (
                     <td>
-                      <input
-                        type="checkbox"
-                        name="event"
-                        value={`${e.id}:${e.version}`}
-                        id={`sel-${e.id}`}
-                        aria-labelledby={`sel-${e.id}-label`}
-                      />
+                      <label class="checkbox-target" for={`sel-${e.id}`}>
+                        <input
+                          type="checkbox"
+                          name="event"
+                          value={`${e.id}:${e.version}`}
+                          id={`sel-${e.id}`}
+                          aria-labelledby={`sel-${e.id}-label`}
+                        />
+                      </label>
                     </td>
                   )}
                   <th scope="row">

@@ -167,7 +167,11 @@ test.describe('sponsorship', () => {
     expect(listed).toEqual([]);
   });
 
-  test('sponsors can get links to manage their sponsorship, without revealing who sponsors', async ({ page }) => {
+  test('sponsors can get links to manage their sponsorship, without revealing who sponsors', async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
     const email = `manager-${uniq()}@example.test`;
     await checkout(page, /^Sponsor as Supporter$/, { email });
     clearOutbox();
@@ -177,12 +181,35 @@ test.describe('sponsorship', () => {
     await page.getByRole('button', { name: 'Email me the links' }).click();
     await expect(page.getByText(`If ${email} belongs to a sponsor`)).toBeVisible();
     const mail = sentEmails().find((m) => m.to === email)!;
-    const portal = new URL(/https?:\/\/\S+\/api\/sponsor\/portal\?token=\S+/.exec(mail.text)![0]);
-    const res = await page.request.get(portal.pathname + portal.search, { maxRedirects: 0 });
+    const portal = new URL(/https?:\/\/\S+\/sponsor\/portal\?token=\S+/.exec(mail.text)![0]);
+    const profile = new URL(/https?:\/\/\S+\/sponsor\/profile\?token=\S+/.exec(mail.text)![0]);
+    const origin = { origin: new URL(page.url()).origin };
+
+    // Email scanners open links on their own: opening one (GET) doesn't use it up.
+    expect((await page.request.get(portal.pathname + portal.search)).status()).toBe(200);
+    const oldLink = await page.request.get(`/api/sponsor/portal${portal.search}`, { maxRedirects: 0 });
+    expect(oldLink.headers().location).toBe(`/sponsor/portal${portal.search}`);
+    await page.goto(portal.pathname + portal.search);
+    await expectNoAxeViolations(page, 'portal landing');
+    await expect(page.getByRole('button', { name: 'Go to my payments' })).toBeVisible();
+
+    // Pressing the button does.
+    const res = await page.request.post(`/api/sponsor/portal${portal.search}`, { headers: origin, maxRedirects: 0 });
     expect(res.headers().location).toMatch(/^\/sponsor\/test-portal\?customer=cus_fake/);
     // The link works once.
-    const again = await page.request.get(portal.pathname + portal.search, { maxRedirects: 0 });
+    const again = await page.request.post(`/api/sponsor/portal${portal.search}`, { headers: origin, maxRedirects: 0 });
     expect(again.headers().location).toBe('/sponsor/manage?expired=1');
+
+    // The profile link also needs its button pressed.
+    const fresh = await browser.newContext({ baseURL: baseURL! });
+    const other = await fresh.newPage();
+    await other.goto(profile.pathname + profile.search);
+    await other.reload(); // a second open (like a scanner's) still works
+    await expectNoAxeViolations(other, 'profile landing');
+    await other.getByRole('button', { name: 'Open my sponsor profile' }).click();
+    await expect(other).toHaveURL(/\/sponsor\/profile$/);
+    await expect(other.getByLabel('Name to show')).toBeVisible();
+    await fresh.close();
 
     // An unknown address gets the same answer and no email.
     clearOutbox();
@@ -191,5 +218,104 @@ test.describe('sponsorship', () => {
     await page.getByRole('button', { name: 'Email me the links' }).click();
     await expect(page.getByText(/belongs to a sponsor/)).toBeVisible();
     expect(sentEmails()).toEqual([]);
+  });
+
+  test("a forged cookie on the thanks page doesn't use up the payer's profile link", async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    await page.goto('/sponsor');
+    await page
+      .locator('form', { has: page.getByRole('button', { name: /^Make a one-off donation$/ }) })
+      .getByRole('button')
+      .click();
+    await expect(page).toHaveURL(/\/sponsor\/test-checkout/);
+    // Pay without following the redirect, so the payer hasn't reached the thanks page yet.
+    const paid = await page.request.post(page.url(), {
+      headers: { origin: new URL(page.url()).origin },
+      form: { email: `forged-${uniq()}@example.test`, outcome: 'paid' },
+      maxRedirects: 0,
+    });
+    const thanks = new URL(paid.headers().location!);
+    const { data } = await service()
+      .from('sponsorship_attempts')
+      .select('id')
+      .eq('checkout_session_id', thanks.searchParams.get('session_id')!)
+      .single();
+
+    const attacker = await browser.newContext({ baseURL: baseURL! });
+    await attacker.addCookies([
+      { name: 'sponsor_attempt', value: `${data!.id}.forged-secret-value`, url: `${baseURL}/sponsor` },
+    ]);
+    const other = await attacker.newPage();
+    await other.goto(thanks.pathname + thanks.search);
+    await expect(other).toHaveURL(/\/sponsor\/thanks/);
+    await expect(other.getByText("We've emailed you a link")).toBeVisible();
+
+    // The real payer still gets straight to their profile.
+    await page.goto(thanks.pathname + thanks.search);
+    await expect(page).toHaveURL(/\/sponsor\/profile\?welcome=1$/);
+    await attacker.close();
+  });
+  test('someone with several sponsor records gets links for each', async ({ page }) => {
+    const email = `twice-${uniq()}@example.test`;
+    const ids: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const { data } = await service()
+        .from('sponsors')
+        .insert({ stripe_customer_id: `cus_twice${uniq()}`, contact_email: email })
+        .select('id')
+        .single();
+      ids.push(data!.id);
+    }
+    await page.goto('/sponsor/manage');
+    await page.getByLabel('Email address').fill(email);
+    await page.getByRole('button', { name: 'Email me the links' }).click();
+    await expect(page.getByText(`If ${email} belongs to a sponsor`)).toBeVisible();
+    expect(sentEmails().filter((m) => m.to === email)).toHaveLength(2);
+    const { data: tokens } = await service()
+      .from('tokens')
+      .select('subject_id')
+      .eq('purpose', 'sponsor_portal')
+      .in('subject_id', ids);
+    expect(new Set(tokens!.map((t) => t.subject_id))).toEqual(new Set(ids));
+  });
+
+  test('admins can decline a profile with a reason, and changes made while reviewing are not lost', async ({
+    page,
+  }) => {
+    const name = `Review Co ${uniq()}`;
+    const { data: sponsor } = await service()
+      .from('sponsors')
+      .insert({ stripe_customer_id: `cus_review${uniq()}`, name, profile_status: 'pending' })
+      .select('id')
+      .single();
+    await signIn(page, await ensureAdmin(), '/admin/sponsors');
+
+    // No reason: refused.
+    await page.getByRole('button', { name: new RegExp(`^Don't publish\\s?: ${name}$`) }).click();
+    await expect(page.getByText('Enter why the profile is not being published')).toBeVisible();
+
+    // The sponsor changes their profile while the admin is looking.
+    await service()
+      .from('sponsors')
+      .update({ name: `${name} v2`, updated_at: new Date().toISOString() })
+      .eq('id', sponsor!.id);
+    await page.getByRole('button', { name: new RegExp(`^Publish profile\\s?: ${name}$`) }).click();
+    await expect(page.getByText(`${name} v2 changed their profile while you were looking`)).toBeVisible();
+    let { data: row } = await service().from('sponsors').select('profile_status').eq('id', sponsor!.id).single();
+    expect(row!.profile_status).toBe('pending');
+
+    // Declining the version shown works, and the sponsor sees the reason.
+    await page.getByLabel(`Reason, if not publishing ${name} v2`).fill('The website address does not work');
+    await page.getByRole('button', { name: new RegExp(`^Don't publish\\s?: ${name} v2$`) }).click();
+    await expect(page.getByText(`Didn't publish the changes for ${name} v2`)).toBeVisible();
+    ({ data: row } = await service()
+      .from('sponsors')
+      .select('profile_status, rejection_reason')
+      .eq('id', sponsor!.id)
+      .single());
+    expect(row).toEqual({ profile_status: 'rejected', rejection_reason: 'The website address does not work' });
   });
 });

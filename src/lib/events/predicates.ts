@@ -142,7 +142,10 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
     else filters.q = values.q;
   }
 
-  if (params.get('when') === 'past') filters.when = 'past';
+  const when = params.get('when');
+  if (when === 'past') filters.when = 'past';
+  // Past and upcoming together, for a chosen day or days (the month grid's "more" links).
+  else if (when === 'any' && filters.range === 'custom') filters.when = 'any';
 
   const page = params.get('page');
   if (page) {
@@ -226,7 +229,7 @@ export function filtersToParams(
   if (filters.price) p.set('price', filters.price);
   for (const a of filters.access) p.append('access', a);
   if (filters.q) p.set('q', filters.q);
-  if (filters.when === 'past') p.set('when', 'past');
+  if (filters.when === 'past' || filters.when === 'any') p.set('when', filters.when);
   const page = overrides.page ?? filters.page;
   if (overrides.includePage !== false && page > 1) p.set('page', String(page));
   return p;

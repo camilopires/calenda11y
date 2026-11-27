@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { db } from '../../../lib/db';
 import { env } from '../../../lib/env';
 import { verifySvix } from '../../../lib/email/webhook';
+import { dropQueuedDigests } from '../../../lib/digest/subscribers';
 
 interface ResendEvent {
   type: string;
@@ -37,6 +38,12 @@ export const POST: APIRoute = async ({ request }) => {
       .select('id');
     // Fail so Resend retries; nothing is lost.
     if (r.error) return new Response('Could not record', { status: 500 });
+    try {
+      await dropQueuedDigests(to);
+    } catch (error) {
+      console.error('[resend webhook] could not drop queued digests', error);
+      return new Response('Could not record', { status: 500 });
+    }
   }
   if (event.data?.email_id) {
     await db()

@@ -2,12 +2,12 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import ErrorSummary from '../../../components/ErrorSummary.astro';
 import SourceForm from '../../../components/SourceForm.astro';
-import { requireAdmin } from '../../../lib/admin/auth';
+import { requireAdmin, takeDraft } from '../../../lib/admin/auth';
 import { db } from '../../../lib/db';
 import { readSourceForm, validateSource, type SourceFormValues } from '../../../lib/imports/sourceForm';
 import { unwrap } from '../../../lib/result';
 
-const guard = await requireAdmin(Astro);
+const guard = await requireAdmin(Astro, { keepDraft: true });
 if (!guard.ok) return guard.response;
 
 let values: SourceFormValues = {
@@ -24,6 +24,10 @@ let values: SourceFormValues = {
   refresh_token: '',
 };
 let errors: Record<string, string> = {};
+// Bring back what was typed if the session ended while saving.
+const draft = guard.form ? null : await takeDraft(Astro);
+const restored = draft !== null;
+if (draft) values = readSourceForm(draft);
 if (guard.form) {
   values = readSourceForm(guard.form);
   const r = validateSource(values);
@@ -51,6 +55,11 @@ if (guard.form) {
   <div class="page-head">
     <h1>Add a source</h1>
   </div>
+  {restored && (
+    <div class="notice notice--important" role="status" tabindex="-1" data-focus-on-load>
+      <p>You were signed out while saving, so we kept what you typed. Check it, then add the source.</p>
+    </div>
+  )}
   <ErrorSummary errors={errors} targets={{ type: 'f-type' }} />
   <SourceForm values={values} errors={errors} submitLabel="Add source" />
 </AdminLayout>

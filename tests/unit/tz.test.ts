@@ -77,3 +77,12 @@ describe('time zones', () => {
     expect(zones).toContain('Europe/Lisbon');
   });
 });
+
+describe('seconds', () => {
+  it('keeps seconds', () => {
+    expect(zonedTimeToUtc('2027-06-10', '18:30:45', 'Europe/London')).toEqual({
+      ok: true,
+      instant: '2027-06-10T17:30:45.000Z',
+    });
+  });
+});

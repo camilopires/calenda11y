@@ -17,7 +17,6 @@ const { filters, errors } = parseFilters(params);
 if (errors.page) return Astro.rewrite('/404');
 const result = await listEvents(filters);
 const name = countryName(code);
-Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
 ---
 
 <BaseLayout

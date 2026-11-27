@@ -193,11 +193,16 @@ class FakePayments implements Payments {
 
 let instance: Payments | undefined;
 
+/** Tests, and local development without a Stripe key, use the stand-in. */
+export function usesFakePayments(): boolean {
+  const e = env();
+  return e.APP_ENV === 'test' || (e.APP_ENV === 'development' && !e.STRIPE_SECRET_KEY);
+}
+
 export function payments(): Payments {
-  instance ??=
-    env().APP_ENV === 'test'
-      ? new FakePayments()
-      : new StripePayments(requireEnv('STRIPE_SECRET_KEY', 'Add a Stripe secret key (a test key while developing).'));
+  instance ??= usesFakePayments()
+    ? new FakePayments()
+    : new StripePayments(requireEnv('STRIPE_SECRET_KEY', 'Add a Stripe secret key (a test key while developing).'));
   return instance;
 }
 

@@ -14,7 +14,6 @@ const provisions = accessProvisions(event);
 const ended = new Date(event.end_instant).getTime() < Date.now();
 const cancelled = event.status === 'cancelled';
 const country = event.country_code ? countryName(event.country_code) : null;
-Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
 ---
 
 <BaseLayout

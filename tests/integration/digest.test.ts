@@ -133,3 +133,42 @@ describe('weekly digest', () => {
     expect(r.counts).toEqual({ not_due: 1 });
   });
 });
+
+describe('review regressions: digest', () => {
+  it('unsubscribing drops digests still waiting to be sent', async () => {
+    const { unsubscribe } = await import('../../src/lib/digest/subscribers.ts');
+    const addr = `leaver-${tag}@example.test`;
+    const { data: sub } = await db
+      .from('digest_subscribers')
+      .insert({ email: addr, cadence: 'weekly', confirmed_at: new Date().toISOString() })
+      .select('id,email')
+      .single();
+    await db.rpc('enqueue_emails', {
+      p_emails: [
+        {
+          kind: 'digest',
+          dedupe_key: `digest:test:${sub!.id}`,
+          to_email: addr,
+          subject: 'S',
+          html: '<p>x</p>',
+          text_body: 'x',
+        },
+      ],
+    });
+    await unsubscribe(sub!);
+    const { data } = await db.from('email_outbox').select('id').eq('to_email', addr);
+    expect(data).toEqual([]);
+  });
+
+  it('finishes a run left unfinished when the period ended', async () => {
+    // An unfinished run from the week before, with our subscribers still to do.
+    await db.from('digest_runs').delete().eq('period_start', '2031-02-24');
+    await db
+      .from('digest_runs')
+      .insert({ cadence: 'weekly', period_start: '2031-02-24', period_end: '2031-03-02', status: 'running' });
+    await runDigest('weekly', Date.now() + 30_000, new Date('2031-03-03T09:00:00Z'));
+    const { data } = await db.from('digest_runs').select('status').eq('period_start', '2031-02-24').single();
+    expect(data!.status).toBe('complete');
+    await db.from('digest_runs').delete().eq('period_start', '2031-02-24');
+  });
+});

@@ -88,6 +88,8 @@ export interface FetchPage {
   next?: unknown;
   /** New credentials to save on the source (e.g. a refreshed OAuth token). */
   configUpdate?: Partial<SourceConfig>;
+  /** True if the source had more than we read, so this isn't a full snapshot. */
+  truncated?: boolean;
 }
 
 export interface AdapterContext {
@@ -121,6 +123,8 @@ export interface Adapter {
 export const IMPORT_LIMITS = {
   maxItemsPerRun: 5000,
   maxOccurrencesPerSeries: 200,
+  /** Recurrence steps per series, including past occurrences (a daily series from 2000 is about 10,000). */
+  maxRecurrenceSteps: 50_000,
   horizonDays: 366,
   /** Only events that end after this many days ago are imported. */
   keepEndedDays: 1,

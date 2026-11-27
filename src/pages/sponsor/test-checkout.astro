@@ -1,10 +1,9 @@
 ---
-// Test-only stand-in for Stripe's hosted Checkout page (APP_ENV=test).
+// Stand-in for Stripe's hosted Checkout page, for tests and local development without a Stripe key.
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { env } from '../../lib/env';
-import { fakeState } from '../../lib/services/payments';
+import { fakeState, usesFakePayments } from '../../lib/services/payments';
 
-if (env().APP_ENV !== 'test') return new Response(null, { status: 404 });
+if (!usesFakePayments()) return new Response(null, { status: 404 });
 const st = fakeState();
 const id = Astro.url.searchParams.get('session') ?? '';
 const s = st.sessions.get(id);

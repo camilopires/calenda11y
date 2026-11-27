@@ -30,3 +30,15 @@ describe('backoffMinutes', () => {
     expect(backoffMinutes(100)).toBe(360);
   });
 });
+
+import { digestEmail } from '../../src/lib/email/templates.ts';
+
+describe('digestEmail', () => {
+  const item = { title: 'A', url: 'https://x.test/a', when: 'Monday', where: 'Online', summary: 'S.' };
+  it('gives the true total and a link to all of them when it lists only some', () => {
+    const e = digestEmail('H', [item], 'https://m', 'https://u', { total: 60, listUrl: 'https://x.test/?country=PT' });
+    expect(e.text).toContain('60 events match your choices. Here are the first 1.');
+    expect(e.text).toContain('See all 60 events on calenda11y: https://x.test/?country=PT');
+    expect(digestEmail('H', [item, item], 'https://m', 'https://u').text).toContain('2 events for you.');
+  });
+});

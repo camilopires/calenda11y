@@ -1,10 +1,9 @@
 import type { APIRoute } from 'astro';
-import { env } from '../../../lib/env';
-import { fakeState, type CheckoutSession, type Subscription } from '../../../lib/services/payments';
+import { fakeState, usesFakePayments, type CheckoutSession, type Subscription } from '../../../lib/services/payments';
 
-/** Test-only: read and change the fake Stripe's objects (APP_ENV=test). */
+/** Tests and keyless local development only: read and change the fake Stripe's objects. */
 export const POST: APIRoute = async ({ request }) => {
-  if (env().APP_ENV !== 'test') return new Response(null, { status: 404 });
+  if (!usesFakePayments()) return new Response(null, { status: 404 });
   const body = (await request.json()) as {
     session?: Partial<CheckoutSession> & { id: string };
     subscription?: Subscription;
@@ -20,7 +19,7 @@ export const POST: APIRoute = async ({ request }) => {
 };
 
 export const GET: APIRoute = ({ url }) => {
-  if (env().APP_ENV !== 'test') return new Response(null, { status: 404 });
+  if (!usesFakePayments()) return new Response(null, { status: 404 });
   const st = fakeState();
   const id = url.searchParams.get('session') ?? '';
   return new Response(JSON.stringify(st.sessions.get(id) ?? null), { headers: { 'Content-Type': 'application/json' } });

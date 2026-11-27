@@ -232,3 +232,75 @@ describe('job leases', () => {
     );
   });
 });
+
+describe('cancellations of events not yet published', () => {
+  it('flag a pending event the source cancels', async () => {
+    const source = await makeSource();
+    await runImport(source, later(), ctxFor([calendar(vevent('p1', 'Pending one', '20270501T100000Z'))]));
+    const r = await runImport(
+      source,
+      later(),
+      ctxFor([calendar(vevent('p1', 'Pending one', '20270501T100000Z', ['STATUS:CANCELLED']))]),
+    );
+    expect(r.counts).toMatchObject({ updated: 1 });
+    const [e] = await eventsOf(source.id);
+    expect(e).toMatchObject({ status: 'pending' });
+    expect(e!.flags).toContain('cancel_requested');
+  });
+});
+
+describe('review regressions: imports', () => {
+  it('never marks events missing after a run that was cut short', async () => {
+    const source = await makeSource();
+    await runImport(
+      source,
+      later(),
+      ctxFor([calendar(vevent('t1', 'Kept', '20270601T100000Z'), vevent('t2', 'Other', '20270602T100000Z'))]),
+    );
+    const t2 = (await eventsOf(source.id)).find((e) => e.source_uid === 't2')!;
+    await db.from('events').update({ status: 'approved' }).eq('id', t2.id);
+    // A cut-short read that only saw t1.
+    const truncated: AdapterContext = {
+      now: new Date(),
+      env: {},
+      fetchText: async () => ({
+        status: 200,
+        contentType: 'text/calendar',
+        body: calendar(vevent('t1', 'Kept', '20270601T100000Z')),
+      }),
+    };
+    const { ADAPTERS } = await import('../../src/lib/imports/adapters.ts');
+    const original = ADAPTERS.ics.fetchPage;
+    ADAPTERS.ics.fetchPage = async (...args) => ({ ...(await original(...args)), truncated: true });
+    try {
+      const r = await runImport(source, later(), truncated);
+      expect(r.counts.missing_from_source ?? 0).toBe(0);
+    } finally {
+      ADAPTERS.ics.fetchPage = original;
+    }
+    expect((await eventsOf(source.id)).find((e) => e.source_uid === 't2')!.flags).not.toContain('missing_from_source');
+  });
+
+  it('only proposes fields the source changed, keeping an admin edit to another field', async () => {
+    const source = await makeSource();
+    await runImport(
+      source,
+      later(),
+      ctxFor([calendar(vevent('e1', 'Original title', '20270701T100000Z', ['LOCATION:Room 1']))]),
+    );
+    const e1 = (await eventsOf(source.id))[0]!;
+    await db.from('events').update({ status: 'approved' }).eq('id', e1.id);
+    await db.from('events').update({ title: 'Edited by admin' }).eq('id', e1.id);
+    await runImport(
+      source,
+      later(),
+      ctxFor([calendar(vevent('e1', 'Original title', '20270702T100000Z', ['LOCATION:Room 1']))]),
+    );
+    const after = (await eventsOf(source.id))[0]!;
+    expect(after.pending_changes).toEqual({
+      starts_at: '2027-07-02T10:00:00.000Z',
+      ends_at: '2027-07-02T11:00:00.000Z',
+    });
+    expect(after.title).toBe('Edited by admin');
+  });
+});

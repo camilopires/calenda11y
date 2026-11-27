@@ -20,7 +20,7 @@ import {
 import { signPayload, verifyPayload } from '../../lib/forms/signedPayload';
 import { createSubmission } from '../../lib/forms/submissions';
 import { LIMITS as RATE, allow, clientIp } from '../../lib/security/ratelimit';
-import { captcha, type CaptchaResult } from '../../lib/services/captcha';
+import { captcha, trustCarried, type CaptchaResult, type CarriedCaptcha } from '../../lib/services/captcha';
 
 interface Draft {
   values: EventFormValues;
@@ -42,8 +42,11 @@ if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   const step = String(form.get('step') ?? 'check');
   const ip = clientIp(Astro.request, Astro.clientAddress);
-  // A previous step's captcha result, carried in a signed field.
-  const carried = verifyPayload<CaptchaResult>('captcha', String(form.get('captcha_result') ?? ''));
+  // A previous step's captcha result, carried in a signed field. It's only
+  // trusted for 2 hours, so one solved challenge can't be reused for ever
+  // (an older one just means the form is flagged for a closer look).
+  const carried = verifyPayload<CarriedCaptcha>('captcha', String(form.get('captcha_result') ?? ''));
+  const carriedVerified = trustCarried(carried?.data);
 
   if (step === 'check') {
     values = readEventForm(form);
@@ -55,10 +58,9 @@ if (Astro.request.method === 'POST') {
     }
     const result = validateEvent(values, { now: new Date() });
     errors = { ...(result.ok ? {} : result.errors), ...validateSubmitter(submitter) };
-    captchaResult =
-      carried?.data === 'verified'
-        ? 'verified'
-        : await captcha().verify(String(form.get('cf-turnstile-response') ?? '') || null, ip, PURPOSE);
+    captchaResult = carriedVerified
+      ? 'verified'
+      : await captcha().verify(String(form.get('cf-turnstile-response') ?? '') || null, ip, PURPOSE);
 
     if (Object.keys(errors).length === 0 && result.ok) {
       const limit = captchaResult === 'verified' ? RATE.submitPerIp : RATE.submitUnverifiedPerIp;
@@ -97,7 +99,7 @@ if (Astro.request.method === 'POST') {
 }
 
 const dates = checked ? localDates(checked) : undefined;
-const captchaToken = signPayload('captcha', captchaResult);
+const captchaToken = signPayload('captcha', { result: captchaResult, at: Date.now() });
 const title = view === 'check' ? 'Check your answers' : 'Add an event';
 ---
 

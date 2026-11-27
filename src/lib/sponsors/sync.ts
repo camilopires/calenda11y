@@ -156,7 +156,14 @@ export async function applyPlan(
 ): Promise<'applied' | 'duplicate' | 'ignored'> {
   if (plan.action === 'ignore') {
     // Still record the event, so a repeat delivery doesn't do the work again.
-    if (event) await db().from('stripe_events').insert({ event_id: event.id, type: event.type }).select('event_id');
+    if (event) {
+      const r = await db()
+        .from('stripe_events')
+        .upsert({ event_id: event.id, type: event.type }, { onConflict: 'event_id', ignoreDuplicates: true })
+        .select('event_id');
+      if (r.error)
+        throw new ServiceError('supabase', `recording ignored Stripe event: ${r.error.message}`, r.error.code);
+    }
     return 'ignored';
   }
   const { data, error } = await db().rpc('apply_stripe_sync', {

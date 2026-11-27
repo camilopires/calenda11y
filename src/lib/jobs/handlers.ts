@@ -37,8 +37,8 @@ registerHandler('import', async (job, deadline) => {
   return { finished: r.finished, ok: r.ok, counts: r.counts, ...(r.error && { error: r.error }) };
 });
 
-registerHandler('outbox', async () => {
-  const s = await sendOutbox({ limit: 100 });
+registerHandler('outbox', async (_job, deadline) => {
+  const s = await sendOutbox({ limit: 500, deadline });
   return {
     finished: true,
     ok: s.failed === 0,

@@ -1,40 +1,53 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import Field from '../../components/Field.astro';
-import { requireAdmin } from '../../lib/admin/auth';
+import { requireAdmin, takeDraft } from '../../lib/admin/auth';
 import { db } from '../../lib/db';
 import { unwrap } from '../../lib/result';
 import { approveProfile, getSponsor, stagedLogoUrl, type SponsorRow } from '../../lib/sponsors/profile';
 import { clearSponsorCache } from '../../lib/sponsors/public';
 import { TIERS, formatPounds } from '../../lib/sponsors/tiers';
 
-const guard = await requireAdmin(Astro);
+const guard = await requireAdmin(Astro, { keepDraft: true });
 if (!guard.ok) return guard.response;
 
 let message = '';
 const errors: Record<string, string> = {};
+// Reasons typed before the session ended come back.
+const reasons: Record<string, string> = {};
+const draft = guard.form ? null : await takeDraft(Astro);
+for (const [k, v] of draft?.entries() ?? []) if (k.startsWith('reason-') && typeof v === 'string') reasons[k] = v;
+if (draft) message = "You were signed out, so that wasn't done. We kept any reason you typed. Check it and try again.";
 if (guard.form) {
   const sponsor = await getSponsor(String(guard.form.get('sponsor') ?? ''));
   const step = String(guard.form.get('step') ?? '');
+  const reviewed = String(guard.form.get('reviewed') ?? '');
   if (sponsor && sponsor.profile_status === 'pending') {
-    if (step === 'approve') {
-      await approveProfile(sponsor);
-      clearSponsorCache();
-      message = `Published the profile for ${sponsor.name}.`;
+    if (sponsor.updated_at !== reviewed) {
+      message = `${sponsor.name} changed their profile while you were looking. Check the new version below.`;
+    } else if (step === 'approve') {
+      if (await approveProfile(sponsor, reviewed)) {
+        clearSponsorCache();
+        message = `Published the profile for ${sponsor.name}.`;
+      } else message = `${sponsor.name} changed their profile while you were looking. Check the new version below.`;
     } else if (step === 'reject') {
-      const reason = String(guard.form.get('reason') ?? '').trim();
-      if (!reason) errors[`reason-${sponsor.id}`] = 'Enter why the profile is not being published';
+      const field = `reason-${sponsor.id}`;
+      const reason = String(guard.form.get(field) ?? '').trim();
+      if (!reason) errors[field] = 'Enter why the profile is not being published';
       else {
-        unwrap(
+        const rejected = unwrap(
           await db()
             .from('sponsors')
             .update({ profile_status: 'rejected', rejection_reason: reason.slice(0, 1000) })
             .eq('id', sponsor.id)
+            .eq('updated_at', reviewed)
             .select('id'),
           'supabase',
           'rejecting profile',
-        );
-        message = `Didn't publish the changes for ${sponsor.name}. They'll see your reason when they next open their profile.`;
+        ) as Array<{ id: string }>;
+        message = rejected.length
+          ? `Didn't publish the changes for ${sponsor.name}. They'll see your reason when they next open their profile.`
+          : `${sponsor.name} changed their profile while you were looking. Check the new version below.`;
       }
     }
   }
@@ -44,7 +57,7 @@ const sponsors = unwrap(
   await db()
     .from('sponsors')
     .select(
-      'id,name,url,logo_alt,staged_logo_path,profile_status,approved_name,contact_email,sponsorships(kind,tier,billing_interval,stripe_status,paid,amount_minor,active_until)',
+      'id,name,url,logo_alt,staged_logo_path,profile_status,approved_name,contact_email,updated_at,sponsorships(kind,tier,billing_interval,stripe_status,paid,amount_minor,active_until)',
     )
     .order('created_at', { ascending: false })
     .limit(200),
@@ -112,6 +125,7 @@ const logos = new Map(
           </dl>
           <form method="post" class="flow-tight">
             <input type="hidden" name="sponsor" value={s.id} />
+            <input type="hidden" name="reviewed" value={s.updated_at} />
             <div class="button-row">
               <button type="submit" name="step" value="approve">
                 Publish profile<span class="visually-hidden">: {s.name}</span>
@@ -122,6 +136,7 @@ const logos = new Map(
               label={`Reason, if not publishing ${s.name}`}
               type="textarea"
               rows={2}
+              value={reasons[`reason-${s.id}`] ?? String(guard.form?.get(`reason-${s.id}`) ?? '')}
               error={errors[`reason-${s.id}`]}
             />
             <button type="submit" name="step" value="reject" class="button--secondary">

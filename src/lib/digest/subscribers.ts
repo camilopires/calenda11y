@@ -126,27 +126,17 @@ export async function signUp(email: string, prefs: Preferences): Promise<void> {
 
 export async function confirm(token: string): Promise<Subscriber | null> {
   if (!/^[A-Za-z0-9_-]{20,100}$/.test(token)) return null;
-  // No row means the token is unknown, expired or already used.
+  // Uses the link and confirms in one transaction (see confirm_subscription).
   const subject = unwrapMaybe(
-    await db().rpc('redeem_token', { p_purpose: 'subscribe_confirm', p_hash: sha256(token) }),
+    await db().rpc('confirm_subscription', { p_hash: sha256(token) }),
     'supabase',
-    'redeeming token',
+    'confirming subscription',
   ) as string | null;
   if (!subject) return null;
   return unwrapMaybe(
-    await db()
-      .from('digest_subscribers')
-      .update({
-        confirmed_at: new Date().toISOString(),
-        suppressed_at: null,
-        suppressed_reason: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', subject)
-      .select(COLS)
-      .maybeSingle(),
+    await db().from('digest_subscribers').select(COLS).eq('id', subject).maybeSingle(),
     'supabase',
-    'confirming subscriber',
+    'reading subscriber',
   ) as Subscriber | null;
 }
 
@@ -171,8 +161,21 @@ export async function updatePreferences(s: Subscriber, prefs: Preferences): Prom
   if (r.error) throw new ServiceError('supabase', `saving preferences: ${r.error.message}`);
 }
 
-/** Removes the subscriber entirely: we don't keep the address. */
-export async function unsubscribe(s: Pick<Subscriber, 'id'>): Promise<void> {
+/** Digests already queued for an address, but not sent, are dropped. */
+export async function dropQueuedDigests(email: string): Promise<void> {
+  const r = await db()
+    .from('email_outbox')
+    .delete()
+    .eq('kind', 'digest')
+    .eq('to_email', email)
+    .eq('status', 'queued')
+    .select('id');
+  if (r.error) throw new ServiceError('supabase', `dropping queued digests: ${r.error.message}`);
+}
+
+/** Removes the subscriber entirely (we don't keep the address), and any digests waiting to go to them. */
+export async function unsubscribe(s: Pick<Subscriber, 'id' | 'email'>): Promise<void> {
   const r = await db().from('digest_subscribers').delete().eq('id', s.id).select('id');
   if (r.error) throw new ServiceError('supabase', `unsubscribing: ${r.error.message}`);
+  await dropQueuedDigests(s.email);
 }

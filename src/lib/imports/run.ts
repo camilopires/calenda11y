@@ -141,12 +141,14 @@ export async function runImport(
       }
       const tooMany = (counts.fetched ?? 0) >= IMPORT_LIMITS.maxItemsPerRun;
       if (tooMany) skipped.push({ uid: '(feed)', reason: `Stopped after ${IMPORT_LIMITS.maxItemsPerRun} events` });
-      if (page.next !== undefined && !tooMany) cursor = page.next;
+      // A partial read is not a full snapshot, so nothing may be marked missing from it.
+      const truncated = tooMany || page.truncated === true;
+      if (page.next !== undefined && !truncated) cursor = page.next;
       else {
         status = 'processing';
         cursor = null;
       }
-      await save();
+      await save(truncated ? { truncated: true } : {});
     }
 
     while (status === 'processing' && Date.now() < deadline) {
@@ -161,15 +163,18 @@ export async function runImport(
         'reading staged items',
       ) as Array<{ source_uid: string; payload: ImportedEvent }>;
       if (!batch.length) {
-        status = 'complete';
-        await save({ finished_at: new Date().toISOString() });
+        // Completing the run and flagging missing events happen in one transaction.
         const missing = unwrap(
-          await db().rpc('flag_missing_from_source', { p_run_id: run.id }),
+          await db().rpc('complete_import_run', {
+            p_run_id: run.id,
+            p_counts: counts,
+            p_skipped: skipped.slice(0, MAX_STORED_SKIPS),
+          }),
           'supabase',
-          'flagging missing events',
+          'completing run',
         ) as number;
+        status = 'complete';
         bump(counts, 'missing_from_source', missing);
-        await save();
         break;
       }
       for (const item of batch) {

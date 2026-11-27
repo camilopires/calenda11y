@@ -17,6 +17,7 @@ export const LIMITS = {
   subscribePerIp: { name: 'subscribe-ip', limit: 10, windowSeconds: 3600 },
   emailPerRecipient: { name: 'email-recipient', limit: 3, windowSeconds: 86_400 },
   adminLoginPerIp: { name: 'admin-login-ip', limit: 10, windowSeconds: 3600 },
+  adminDraftPerIp: { name: 'admin-draft-ip', limit: 20, windowSeconds: 3600 },
   checkoutPerIp: { name: 'checkout-ip', limit: 20, windowSeconds: 3600 },
 } as const satisfies Record<string, Limit>;
 

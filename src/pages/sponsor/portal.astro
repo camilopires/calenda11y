@@ -1,0 +1,15 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const token = Astro.url.searchParams.get('token') ?? '';
+---
+
+<BaseLayout title="Manage payments" nav="sponsor" breadcrumbs={[{ href: '/sponsor', label: 'Sponsor' }]} noindex>
+  <div class="page-head flow">
+    <h1>Manage payments</h1>
+    <p class="lede">Change your card, get receipts or cancel, on a page run by Stripe.</p>
+    <form method="post" action={`/api/sponsor/portal?token=${encodeURIComponent(token)}`}>
+      <button type="submit">Go to my payments</button>
+    </form>
+  </div>
+</BaseLayout>

@@ -93,4 +93,41 @@ test.describe('scheduled jobs and imports', () => {
     await page.goto(`/events/${ev!.slug}`);
     await expect(page.getByRole('heading', { level: 1, name: 'New title from the source' })).toBeVisible();
   });
+
+  test('a source that has not worked for 13 hours shows a warning on admin pages', async ({ page }) => {
+    const name = `Stale ${uniq()}`;
+    await service()
+      .from('import_sources')
+      .insert({
+        type: 'ics',
+        name,
+        enabled: true,
+        config: { url: 'https://example.org/x.ics' },
+        created_at: new Date(Date.now() - 14 * 3600_000).toISOString(),
+      });
+    await signIn(page, await ensureAdmin());
+    await expect(page.getByRole('region', { name: 'Things that need attention' })).toContainText(
+      'not worked for over 13 hours',
+    );
+    await service().from('import_sources').update({ enabled: false }).eq('name', name);
+  });
+  test('a new source typed before the session expired comes back after signing in', async ({ page }) => {
+    const admin = await ensureAdmin();
+    await signIn(page, admin, '/admin/sources/new');
+    const name = `Draft source ${uniq()}`;
+    await page.getByLabel('Name').fill(name);
+    await page.getByLabel('Feed address').fill('https://feed.calenda11y-test.invalid/draft.ics');
+    const cookies = await page.context().cookies();
+    await page.context().clearCookies();
+    await page.context().addCookies(cookies.filter((c) => !c.name.startsWith('sb-')));
+    await page.getByRole('button', { name: 'Add source' }).click();
+    await expect(page).toHaveURL(/\/admin\/login\?next=.*&expired=1$/);
+    await signIn(page, admin, '/admin/sources/new');
+    await expect(page.getByText('so we kept what you typed')).toBeVisible();
+    await expect(page.getByLabel('Name')).toHaveValue(name);
+    await expect(page.getByLabel('Feed address')).toHaveValue('https://feed.calenda11y-test.invalid/draft.ics');
+    // Nothing was saved yet.
+    const { data } = await service().from('import_sources').select('id').eq('name', name);
+    expect(data).toEqual([]);
+  });
 });

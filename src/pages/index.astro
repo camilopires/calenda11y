@@ -24,13 +24,12 @@ const feedQs = feedQuery.toString();
 
 const where =
   filters.country === ONLINE ? ' you can join online' : filters.country ? ` in ${countryName(filters.country)}` : '';
+const kind = filters.when === 'any' ? '' : past ? 'past ' : 'upcoming ';
 const countText =
   result.total === 0
-    ? `No ${past ? 'past' : 'upcoming'} events found${where}`
-    : `${result.total} ${past ? 'past' : 'upcoming'} ${result.total === 1 ? 'event' : 'events'}${where}` +
+    ? `No ${kind}events found${where}`
+    : `${result.total} ${kind}${result.total === 1 ? 'event' : 'events'}${where}` +
       (result.pages > 1 ? `. Page ${result.page} of ${result.pages}` : '');
-
-Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
 ---
 
 <BaseLayout

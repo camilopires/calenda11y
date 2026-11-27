@@ -1,6 +1,7 @@
 import ICAL from 'ical.js';
 import { XMLParser } from 'fast-xml-parser';
 import { expect, expectNoAxeViolations, expectValidHtml, test } from '../a11y/fixtures.ts';
+import { service, uniq } from './support.ts';
 
 function parseIcs(text: string) {
   const comp = new ICAL.Component(ICAL.parse(text));
@@ -100,4 +101,41 @@ test.describe('calendar integrations', () => {
       await expectValidHtml(page, path);
     });
   }
+  test('"more events" on a past day of the grid lists that day\'s past events', async ({ page }) => {
+    const d = new Date();
+    d.setUTCDate(1);
+    d.setUTCMonth(d.getUTCMonth() - 1);
+    const month = d.toISOString().slice(0, 7);
+    const day = `${month}-15`;
+    const tag = uniq();
+    const rows = Array.from({ length: 4 }, (_, i) => ({
+      slug: `past-${tag}-${i}`,
+      title: `Past grid ${tag} ${i}`,
+      summary: 'Summary.',
+      timezone: 'UTC',
+      format: 'online',
+      starts_at: `${day}T1${i}:00:00Z`,
+      ends_at: `${day}T1${i}:30:00Z`,
+      status: 'approved',
+      source: 'form',
+    }));
+    await service().from('events').insert(rows);
+    try {
+      await page.goto(`/calendar?month=${month}&q=${tag}`);
+      const more = page.getByRole('link', { name: /^1 more event on / });
+      await expect(more).toHaveAttribute('href', /when=any/);
+      await more.click();
+      for (const r of rows) await expect(page.getByRole('link', { name: r.title })).toBeVisible();
+    } finally {
+      await service().from('events').delete().like('slug', `past-${tag}-%`);
+    }
+  });
+
+  test('pages are not cached by shared caches; feeds are', async ({ request }) => {
+    for (const path of ['/', '/calendar', '/sponsor']) {
+      const res = await request.get(path);
+      expect(res.headers()['cache-control'], path).toBe('private, no-cache');
+    }
+    expect((await request.get('/feeds/all.ics')).headers()['cache-control']).toMatch(/public/);
+  });
 });

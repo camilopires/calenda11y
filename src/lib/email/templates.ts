@@ -111,17 +111,27 @@ export function digestEmail(
   items: DigestItem[],
   manageLink: string,
   unsubscribeLink: string,
+  options: { total?: number; listUrl?: string } = {},
 ): EmailContent {
+  const total = options.total ?? items.length;
+  const more = total > items.length;
   return renderEmail(
     heading,
     heading,
     [
-      { type: 'p', text: `${items.length} ${items.length === 1 ? 'event' : 'events'} for you.` },
+      {
+        type: 'p',
+        text: more
+          ? `${total} events match your choices. Here are the first ${items.length}.`
+          : `${items.length} ${items.length === 1 ? 'event' : 'events'} for you.`,
+      },
       {
         type: 'list',
         items: items.map((i) => ({ text: i.title, href: i.url, detail: `${i.when}. ${i.where}. ${i.summary}` })),
       },
-      { type: 'link', text: 'See all events on calenda11y', href: url('/') },
+      more && options.listUrl
+        ? { type: 'link', text: `See all ${total} events on calenda11y`, href: options.listUrl }
+        : { type: 'link', text: 'See all events on calenda11y', href: options.listUrl ?? url('/') },
     ],
     [
       { type: 'p', text: 'You get this because you signed up for calenda11y emails.' },

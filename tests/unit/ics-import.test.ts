@@ -173,3 +173,53 @@ describe('normalise', () => {
     expect(r.ok && r.event.fields.url).toBeNull();
   });
 });
+
+describe('review regressions', () => {
+  const cal = (...lines: string[]) =>
+    ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:x', ...lines, 'END:VCALENDAR'].join('\r\n');
+
+  it("still imports this year's occurrences of a weekly series that started years ago", () => {
+    const body = cal(
+      'BEGIN:VEVENT',
+      'UID:old-weekly',
+      'DTSTAMP:20200101T000000Z',
+      'DTSTART:20200106T180000Z',
+      'DTEND:20200106T190000Z',
+      'RRULE:FREQ=WEEKLY',
+      'SUMMARY:Old weekly',
+      'END:VEVENT',
+    );
+    const page = parseIcs(body, source, NOW);
+    expect(page.items.length).toBeGreaterThan(40);
+    expect(page.items[0]!.starts_at! >= '2027-01-14').toBe(true);
+    expect(page.items[0]!.starts_at).toMatch(/T18:00:00/);
+  });
+
+  it('keeps seconds when converting zoned and floating times', () => {
+    const body = cal(
+      'BEGIN:VEVENT',
+      'UID:secs',
+      'DTSTAMP:20270101T000000Z',
+      'DTSTART;TZID=Europe/London:20270610T183045',
+      'DTEND;TZID=Europe/London:20270610T193045',
+      'SUMMARY:Seconds',
+      'END:VEVENT',
+    );
+    expect(parseIcs(body, source, NOW).items[0]!.starts_at).toBe('2027-06-10T17:30:45.000Z');
+  });
+
+  it('says when a feed was cut short, so nothing is marked missing from it', () => {
+    const many = Array.from({ length: 5001 }, (_, i) => [
+      'BEGIN:VEVENT',
+      `UID:m${i}`,
+      'DTSTAMP:20270101T000000Z',
+      'DTSTART:20270301T100000Z',
+      'DTEND:20270301T110000Z',
+      'SUMMARY:M',
+      'END:VEVENT',
+    ]).flat();
+    const page = parseIcs(cal(...many), source, NOW);
+    expect(page.items).toHaveLength(5000);
+    expect(page.truncated).toBe(true);
+  });
+});
