@@ -233,3 +233,27 @@ describe('cleanup', () => {
     expect(await changesFor(e.id)).toHaveLength(0);
   });
 });
+
+describe('alert round cleanup', () => {
+  it('removes finished rounds older than 30 days, and keeps recent ones', async () => {
+    const old = new Date(Date.now() - 31 * 86_400_000).toISOString();
+    const { data } = await db
+      .from('alert_rounds')
+      .insert([
+        { cadence: 'daily', round_date: '2001-01-01', snapshot_seq: 0, status: 'complete', started_at: old },
+        { cadence: 'daily', round_date: '2001-01-02', snapshot_seq: 0, status: 'complete' },
+      ])
+      .select('id,round_date');
+    await db.rpc('run_cleanup_digest');
+    const left = (await db.from('alert_rounds').select('round_date').in('round_date', ['2001-01-01', '2001-01-02']))
+      .data!;
+    expect(left).toEqual([{ round_date: '2001-01-02' }]);
+    await db
+      .from('alert_rounds')
+      .delete()
+      .in(
+        'id',
+        data!.map((r) => r.id),
+      );
+  });
+});
