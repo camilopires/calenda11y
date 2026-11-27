@@ -6,7 +6,7 @@
  */
 import { lookupPlace } from '../geo/lookup.ts';
 import { formatAt } from '../geo/place.ts';
-import { unitFor } from '../geo/distance.ts';
+import { convertRadius, shownUnit, unitFor } from '../geo/distance.ts';
 import type { FieldErrors } from '../forms/errors.ts';
 import { validatePreferences, type PreferenceValues } from './form.ts';
 import type { Preferences } from './subscribers.ts';
@@ -38,12 +38,15 @@ export async function settlePlace(v: PreferenceValues, ip: string): Promise<Sett
   if (!found.places.length) {
     return { kind: 'errors', values: v, errors: { near: "We couldn't find that place. Try a town or city name" } };
   }
+  // "Within" was showing the old place's unit (or miles); keep the distance chosen in the new one.
+  const shown = shownUnit(!!v.nearAt, v.nearUnit);
   const asValues = (p: (typeof found.places)[number]): PreferenceValues => ({
     ...v,
     near: p.label,
     nearFrom: p.label,
     nearAt: formatAt(p),
     nearUnit: unitFor(p.countryCode),
+    nearWithin: String(convertRadius(Number(v.nearWithin || 25), shown, unitFor(p.countryCode))),
     nearPick: '',
   });
   if (found.places.length === 1) {

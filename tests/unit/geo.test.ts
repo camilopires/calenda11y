@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  convertRadius,
   RADII,
   boundingBox,
   formatDistance,
@@ -95,6 +96,18 @@ describe('units and wording', () => {
     expect(formatDistance(19.6, 'mi')).toBe('12 miles');
     expect(formatDistance(0.4, 'km')).toBe('under 1 km');
     expect(formatDistance(40.4, 'km')).toBe('40 km');
+  });
+});
+
+describe('convertRadius', () => {
+  it('keeps the distance as near as the list allows when the unit changes', () => {
+    expect(convertRadius(10, 'mi', 'km')).toBe(10);
+    expect(convertRadius(25, 'mi', 'km')).toBe(50);
+    expect(convertRadius(50, 'mi', 'km')).toBe(100);
+    expect(convertRadius(100, 'mi', 'km')).toBe(100);
+    expect(convertRadius(50, 'km', 'mi')).toBe(25);
+    expect(convertRadius(100, 'km', 'mi')).toBe(50);
+    expect(convertRadius(50, 'km', 'km')).toBe(50);
   });
 });
 

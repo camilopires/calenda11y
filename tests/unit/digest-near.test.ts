@@ -101,4 +101,27 @@ describe('digest places', () => {
       'a weekly email of events within 25 miles of Chatham, Kent',
     );
   });
+
+  it('a picked place in another unit keeps the distance chosen in miles', () => {
+    const r = validatePreferences(
+      form({ near: 'Lisbon', near_pick: '38.7223,-9.1393|km|Lisbon, Portugal', near_within: '50' }),
+    );
+    expect(r.ok && r.prefs.near).toMatchObject({ unit: 'km', radius: 100, km: 100 });
+  });
+
+  it('a long place name saves again unchanged, without another search', () => {
+    const label = `${'Long Place Name '.repeat(9)}, United Kingdom`.slice(0, 160);
+    const values = preferencesToValues({ ...base, near: { ...chatham, label } });
+    const r = validatePreferences(
+      form({
+        near: values.near,
+        near_from: values.nearFrom!,
+        near_at: values.nearAt,
+        near_u: values.nearUnit,
+        near_within: values.nearWithin,
+      }),
+    );
+    expect(r.ok && r.lookup).toBeFalsy();
+    expect(r.ok && r.prefs.near?.label).toBe(label);
+  });
 });

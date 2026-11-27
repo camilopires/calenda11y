@@ -1,5 +1,7 @@
 ---
 import ChoiceGroup from './ChoiceGroup.astro';
+import { shownUnit } from '../lib/geo/distance';
+import { NEAR_MAX } from '../lib/geo/place';
 import Field from './Field.astro';
 import type { FieldErrors } from '../lib/forms/errors';
 import type { PreferenceValues } from '../lib/digest/form';
@@ -22,7 +24,7 @@ interface Props {
 }
 const { values: v, errors: e, placeChoices } = Astro.props;
 const placed = !!v.near && !!v.nearAt && v.nearFrom === v.near;
-const unitWord = placed && v.nearUnit === 'km' ? 'km' : 'miles';
+const unitWord = shownUnit(placed, v.nearUnit) === 'km' ? 'km' : 'miles';
 const countries = await allCountries();
 ---
 
@@ -83,7 +85,7 @@ const countries = await allCountries();
   label="Near"
   value={v.near}
   error={e.near}
-  maxlength={100}
+  maxlength={NEAR_MAX}
   hint="A town, city or postcode. Leave blank for anywhere."
 />
 {placeChoices && (

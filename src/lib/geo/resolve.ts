@@ -6,7 +6,7 @@
  */
 import { lookupPlace } from './lookup.ts';
 import { formatAt } from './place.ts';
-import { unitFor } from './distance.ts';
+import { convertRadius, shownUnit, unitFor } from './distance.ts';
 
 export type Resolution =
   | { kind: 'redirect'; href: string }
@@ -16,9 +16,14 @@ export type Resolution =
 /** A link to the same page and filters, with this place chosen. */
 function withPlace(url: URL, p: { label: string; lat: number; lng: number; countryCode: string | null }): string {
   const q = new URLSearchParams(url.searchParams);
+  // "Within" was showing the old place's unit (or miles); keep the distance chosen in the new one.
+  const shown = shownUnit(!!q.get('at'), q.get('u') === 'km' ? 'km' : 'mi');
+  const unit = unitFor(p.countryCode);
+  const within = Number(q.get('within') || 25);
   q.set('near', p.label);
   q.set('at', formatAt(p));
-  q.set('u', unitFor(p.countryCode));
+  q.set('u', unit);
+  q.set('within', String(convertRadius(within, shown, unit)));
   q.delete('near_from');
   q.delete('page');
   return `${url.pathname}?${q}`;

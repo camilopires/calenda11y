@@ -16,7 +16,8 @@ import {
   topicFromSlug,
 } from '../lib/events/model';
 import { formatMonthYear, isIsoMonth, monthOptions, todayUtc } from '../lib/events/dates';
-import { RADII } from '../lib/geo/distance';
+import { RADII, shownUnit } from '../lib/geo/distance';
+import { NEAR_MAX } from '../lib/geo/place';
 import type { CountryCount } from '../lib/events/query';
 import type { FilterValues } from '../lib/events/predicates';
 
@@ -72,7 +73,7 @@ const moreCount =
   (!monthChosen && values.to ? 1 : 0);
 
 // "Within" reads in the place's unit; miles until a place says otherwise.
-const unitWord = values.unit === 'km' && values.at ? 'km' : 'miles';
+const unitWord = shownUnit(!!values.at, values.unit) === 'km' ? 'km' : 'miles';
 const nearResolved = !!values.near && !!values.at && !errors.near;
 
 // This month and the next 11 (or the previous 11 for past events). A month
@@ -141,7 +142,7 @@ if (monthChosen && !months.some((m) => m.value === values.range)) {
       type="search"
       value={values.near}
       error={errors.near}
-      maxlength={100}
+      maxlength={NEAR_MAX}
       hint="A town, city or postcode"
       showOptional={false}
     />

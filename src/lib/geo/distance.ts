@@ -102,3 +102,19 @@ export function formatDistance(km: number, unit: Unit): string {
   const r = Math.round(n);
   return unit === 'mi' ? `${r} ${r === 1 ? 'mile' : 'miles'}` : `${r} km`;
 }
+
+/** The unit "Within" shows: the place's, once one is found; miles until then. */
+export const shownUnit = (placed: boolean, unit: Unit): Unit => (placed && unit === 'km' ? 'km' : 'mi');
+
+/**
+ * A distance chosen in one unit, in another: the nearest choice in the
+ * list (the larger on a tie), so 50 miles becomes 100 km, not 50 km.
+ */
+export function convertRadius(radius: number, from: Unit, to: Unit): number {
+  if (from === to) return radius;
+  const km = toKm(radius, from);
+  const target = to === 'mi' ? km / KM_PER_MILE : km;
+  let best: number = RADII[0];
+  for (const r of RADII) if (Math.abs(r - target) <= Math.abs(best - target)) best = r;
+  return best;
+}

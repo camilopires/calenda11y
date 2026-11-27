@@ -18,3 +18,6 @@ export function formatAt(p: Point): string {
   const r = (n: number) => Number(n.toFixed(5));
   return `${r(p.lat)},${r(p.lng)}`;
 }
+
+/** The longest place name kept: as long as a found place's label can be. */
+export const NEAR_MAX = 200;

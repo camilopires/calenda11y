@@ -26,7 +26,7 @@ import {
 } from './model.ts';
 import { addDays, addMonths, endOfMonth, formatMonthYear, isIsoDate, isIsoMonth } from './dates.ts';
 import { RADII, boundingBox, toKm, type NearFilter, type Unit } from '../geo/distance.ts';
-import { formatAt, parseAt } from '../geo/place.ts';
+import { NEAR_MAX, formatAt, parseAt } from '../geo/place.ts';
 
 /** The named ranges a URL can ask for. A month is given as `range=YYYY-MM`. */
 export const RANGES = ['upcoming', 'this-month', '3-months', 'custom'] as const;
@@ -118,7 +118,7 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
       return topic ? TOPIC_SLUGS[topic] : t;
     }),
     cfp: params.get('cfp') === 'open',
-    near: (params.get('near') ?? '').trim().slice(0, 100),
+    near: (params.get('near') ?? '').trim().slice(0, NEAR_MAX),
     nearFrom: params.get('near_from'),
     at: params.get('at') ?? '',
     unit: params.get('u') === 'mi' ? 'mi' : 'km',

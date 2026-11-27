@@ -12,6 +12,7 @@ import { db } from '../../lib/db';
 import { TOPIC_SLUGS, topicFromSlug } from '../../lib/events/model';
 import { LIMITS, allow, clientIp } from '../../lib/security/ratelimit';
 import { unwrap } from '../../lib/result';
+import { NEAR_MAX } from '../../lib/geo/place';
 
 const PURPOSE = 'digest-signup';
 interface Draft {
@@ -36,8 +37,8 @@ let values: PreferenceValues = {
   // Coming from an "Open for speakers" search ticks the calls-for-speakers box.
   include_cfp: q.get('cfp') === 'open',
   // A place from a near-me search comes along (list names: near, at, u, within, online=include).
-  near: (q.get('near') ?? '').slice(0, 100),
-  nearFrom: q.get('at') ? (q.get('near') ?? '') : null,
+  near: (q.get('near') ?? '').trim().slice(0, NEAR_MAX),
+  nearFrom: q.get('at') ? (q.get('near') ?? '').trim().slice(0, NEAR_MAX) : null,
   nearAt: q.get('at') ?? '',
   nearUnit: q.get('u') === 'mi' ? 'mi' : 'km',
   nearWithin: q.get('within') ?? '',

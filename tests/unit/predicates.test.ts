@@ -401,3 +401,12 @@ describe('near filter', () => {
     );
   });
 });
+
+describe('long place names', () => {
+  it('a resolved name up to 200 characters is kept, and not looked up again', () => {
+    const label = 'x'.repeat(180);
+    const r = parseFilters(new URLSearchParams({ near: label, near_from: label, at: '51.38,0.52', u: 'mi' }));
+    expect(r.lookup).toBeUndefined();
+    expect(r.filters.near?.label).toBe(label);
+  });
+});

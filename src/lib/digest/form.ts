@@ -10,8 +10,8 @@ import {
   type Format,
 } from '../events/model.ts';
 import { isCountryCode } from '../events/predicates.ts';
-import { RADII, toKm, type Unit } from '../geo/distance.ts';
-import { formatAt, parseAt } from '../geo/place.ts';
+import { RADII, convertRadius, shownUnit, toKm, type Unit } from '../geo/distance.ts';
+import { NEAR_MAX, formatAt, parseAt } from '../geo/place.ts';
 import { CADENCES, type Preferences } from './subscribers.ts';
 
 export interface PreferenceValues {
@@ -48,7 +48,7 @@ export function readPreferences(form: FormData): PreferenceValues {
     include_cfp: form.get('include_cfp') === 'on',
     near: String(form.get('near') ?? '')
       .trim()
-      .slice(0, 100),
+      .slice(0, NEAR_MAX),
     nearFrom: form.has('near_from') ? String(form.get('near_from')) : null,
     nearAt: String(form.get('near_at') ?? ''),
     nearUnit: form.get('near_u') === 'mi' ? 'mi' : 'km',
@@ -113,7 +113,9 @@ export function validatePreferences(v: PreferenceValues): PreferenceValidation {
           ? { ...pos, unit: v.nearUnit, label: v.near }
           : null;
     if (place) {
-      near = { ...place, radius, km: toKm(radius, place.unit), includeOnline: v.nearOnline };
+      // A picked place may be in another unit than "Within" showed.
+      const r = pick && pickPos ? convertRadius(radius, shownUnit(!!v.nearAt, v.nearUnit), place.unit) : radius;
+      near = { ...place, radius: r, km: toKm(r, place.unit), includeOnline: v.nearOnline };
     } else lookup = v.near;
   }
 
