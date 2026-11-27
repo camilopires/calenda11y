@@ -40,6 +40,10 @@ const productionSchema = z.object({
   LUMA_API_KEY: z.string().optional(),
   MEETUP_CLIENT_ID: z.string().optional(),
   MEETUP_CLIENT_SECRET: z.string().optional(),
+  // Place search for "near me". A setting, so the service can be switched
+  // (OpenStreetMap's policy asks for that) or turned off without a release.
+  GEOCODER_URL: z.url().default('https://nominatim.openstreetmap.org/search'),
+  GEOCODER_OFF: z.enum(['0', '1']).default('0'),
 });
 
 const localSchema = z.object({
@@ -60,6 +64,10 @@ const localSchema = z.object({
   LUMA_API_KEY: z.string().optional(),
   MEETUP_CLIENT_ID: z.string().optional(),
   MEETUP_CLIENT_SECRET: z.string().optional(),
+  // Place search for "near me". A setting, so the service can be switched
+  // (OpenStreetMap's policy asks for that) or turned off without a release.
+  GEOCODER_URL: z.url().default('https://nominatim.openstreetmap.org/search'),
+  GEOCODER_OFF: z.enum(['0', '1']).default('0'),
 });
 
 export type Env = z.infer<typeof productionSchema> | z.infer<typeof localSchema>;

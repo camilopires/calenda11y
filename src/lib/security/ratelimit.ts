@@ -19,6 +19,7 @@ export const LIMITS = {
   adminLoginPerIp: { name: 'admin-login-ip', limit: 10, windowSeconds: 3600 },
   adminDraftPerIp: { name: 'admin-draft-ip', limit: 20, windowSeconds: 3600 },
   checkoutPerIp: { name: 'checkout-ip', limit: 20, windowSeconds: 3600 },
+  placeSearchPerIp: { name: 'place-search-ip', limit: 30, windowSeconds: 3600 },
 } as const satisfies Record<string, Limit>;
 
 /**
