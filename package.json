@@ -22,7 +22,9 @@
     "test:e2e": "playwright test",
     "test:stripe-contract": "vitest run --project contract",
     "readability": "node --env-file-if-exists=.env scripts/readability.ts",
-    "env:local": "node scripts/env-local.ts"
+    "env:local": "node scripts/env-local.ts",
+    "test:smoke": "playwright test -c playwright.smoke.config.ts",
+    "stripe:setup": "node --env-file-if-exists=.env scripts/stripe-setup.ts"
   },
   "dependencies": {
     "@astrojs/node": "11.1.14",

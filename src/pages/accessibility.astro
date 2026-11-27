@@ -1,38 +1,79 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+
+// Update these when the site is audited.
+const LAST_REVIEWED = '27 November 2026';
+const MANUAL_AUDIT_DONE = false;
 ---
 
 <BaseLayout title="Accessibility statement" crumbLabel="Accessibility statement">
   <div class="page-head">
     <h1>Accessibility statement</h1>
-    <p class="lede">calenda11y is built to meet WCAG 2.2 at level AAA, the highest level.</p>
+    <p class="lede">
+      calenda11y is built to meet the Web Content Accessibility Guidelines (WCAG) 2.2 at level AAA, the highest level.
+    </p>
   </div>
   <div class="flow">
     <h2>What you can do on this site</h2>
     <ul>
-      <li>Use it with a keyboard, a screen reader, voice control or switch access.</li>
+      <li>Use it with a keyboard, screen reader, voice control or switch access.</li>
       <li>Zoom up to 400% without the page breaking or scrolling sideways.</li>
       <li>
-        Change the colours, text size and spacing in <a href="/settings">display settings</a>.
+        Change the colours, text size and spacing in <a href="/settings">display settings</a>, or use your own browser
+        settings.
       </li>
       <li>Use every feature without JavaScript.</li>
-      <li>Take as long as you need. Nothing on this site times out.</li>
+      <li>Take as long as you need. No page or form on this site has a time limit.</li>
+      <li>
+        Find what words mean in the <a href="/glossary">glossary</a>.
+      </li>
     </ul>
+
     <h2>How we test</h2>
     <p>
-      Every page is checked automatically on every change, for colour contrast, keyboard access, focus visibility, valid
-      code and the automated WCAG checks in axe. People also test it with screen readers before each release.
+      Every change is checked automatically before it goes live. The checks cover colour contrast in every colour theme,
+      focus visibility, keyboard use, reflow and zoom, text spacing, valid code, reading level, and the automated WCAG
+      checks in the axe tool.
     </p>
-    <h2>Known limits</h2>
     <p>
-      Event names, summaries and descriptions are written by organisers, sometimes in other languages. We ask for a
-      plain-language summary of every event, but we can't guarantee the reading level of text we didn't write.
+      Automated checks can't find everything, so people also test the site with screen readers (VoiceOver and NVDA) and
+      voice control.
+      {MANUAL_AUDIT_DONE
+        ? ' The last full test with people was on ' + LAST_REVIEWED + '.'
+        : ' The first full test with people has not been done yet, so we cannot yet say the site fully meets level AAA.'}
     </p>
+
+    <h2>Parts we don't control</h2>
+    <ul>
+      <li>
+        <strong>Event details.</strong> Organisers write event names and descriptions, sometimes in other languages. We
+        ask for a plain-language summary of every event and check it before publishing, but we can't guarantee the
+        reading level of text we didn't write.
+      </li>
+      <li>
+        <strong>Payments.</strong> Sponsorship payments happen on pages run by Stripe. They are not covered by this
+        statement.
+      </li>
+      <li>
+        <strong>Spam checks.</strong> Our forms use Cloudflare Turnstile, which normally works without you doing
+        anything and never asks you to solve a puzzle. If it can't run, you can still send the form.
+      </li>
+    </ul>
+
+    <h2>Signing in</h2>
+    <p>
+      Only the people who check events need to sign in. They sign in with a link sent by email: there is no password to
+      remember. If their session ends while they are saving, what they typed is kept and restored after they sign in
+      again.
+    </p>
+
     <h2>Tell us about a problem</h2>
     <p>
       If something on calenda11y doesn't work for you, email
-      <a href="mailto:accessibility@calenda11y.org">accessibility@calenda11y.org</a>. We aim to reply within 5 working
-      days.
+      <a href="mailto:accessibility@calenda11y.org">accessibility@calenda11y.org</a>. Tell us the page and what went
+      wrong. We aim to reply within 5 working days.
     </p>
+
+    <p class="small muted">This statement was last reviewed on {LAST_REVIEWED}.</p>
   </div>
 </BaseLayout>
