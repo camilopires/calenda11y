@@ -210,4 +210,37 @@ test.describe('calendar integrations', () => {
     );
     await expect(details.getByRole('link', { name: 'Law and compliance' })).toHaveAttribute('href', '/topics/law');
   });
+  test('the "just added" feed lists newly published events, and takes filters', async ({ page, request }) => {
+    const title = `Just added ${Date.now()}`;
+    const { data: ev } = await service()
+      .from('events')
+      .insert({
+        slug: `just-added-${Date.now()}`,
+        title,
+        summary: 'Fresh.',
+        timezone: 'UTC',
+        format: 'online',
+        starts_at: '2033-05-01T10:00:00Z',
+        ends_at: '2033-05-01T11:00:00Z',
+        types: ['talk'],
+        topics: ['law'],
+        status: 'approved',
+      })
+      .select('id')
+      .single();
+    try {
+      const all = await (await request.get('/feeds/new.rss')).text();
+      expect(all).toContain(`<title>New: ${title}</title>`);
+      expect(await (await request.get('/feeds/new.rss?topic=law')).text()).toContain(title);
+      expect(await (await request.get('/feeds/new.rss?topic=mobile')).text()).not.toContain(title);
+      expect((await request.get('/feeds/new.rss?topic=nope')).status()).toBe(400);
+      await page.goto('/subscribe?topic=law');
+      await expect(page.getByRole('link', { name: 'just added and changed' })).toHaveAttribute(
+        'href',
+        /\/feeds\/new\.rss\?topic=law$/,
+      );
+    } finally {
+      await service().from('events').delete().eq('id', ev!.id);
+    }
+  });
 });

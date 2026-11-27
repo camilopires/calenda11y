@@ -16,6 +16,7 @@ const feedUrl = new URL(feedPath, site).href;
 // The deadlines feed shows calls whatever their state, so "open only" isn't carried over.
 const cfpParams = filtersToParams(withoutCfp(filters), { includePage: false });
 const cfpFeedUrl = new URL(`/feeds/cfp.ics${cfpParams.size ? `?${cfpParams}` : ''}`, site).href;
+const newRssUrl = new URL(qs ? `/feeds/new.rss?${qs}` : '/feeds/new.rss', site).href;
 const rssUrl = new URL(qs ? `/feeds/events.rss?${qs}` : '/feeds/events.rss', site).href;
 const description = describeFilters(filters);
 const topCountries = (await countryCounts()).sort((a, b) => b.upcoming - a.upcoming).slice(0, 8);
@@ -133,6 +134,9 @@ const topCountries = (await countryCounts()).sort((a, b) => b.upcoming - a.upcom
     <p>
       Add this <abbr title="Really Simple Syndication">RSS</abbr> feed to your feed reader:
       <a href={rssUrl}>RSS feed of {description}</a>.
+    </p>
+    <p>
+      To hear as soon as events are added or changed: <a href={newRssUrl}>just added and changed</a>.
     </p>
   </section>
 </BaseLayout>

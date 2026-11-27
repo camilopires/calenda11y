@@ -223,8 +223,12 @@ describe('cleanup', () => {
       .eq('id', lagging.id);
     await db.rpc('run_cleanup_digest');
     expect(await changesFor(e.id)).toHaveLength(1);
-    // Everyone (this file's other subscribers too) has now had it.
-    await db.from('digest_subscribers').update({ alert_cursor: row!.seq }).in('id', subs);
+    // Everyone with alerts (including subscribers other tests left behind) has now had it.
+    await db
+      .from('digest_subscribers')
+      .update({ alert_cursor: row!.seq })
+      .in('cadence', ['daily', 'instant'])
+      .lt('alert_cursor', row!.seq);
     await db.rpc('run_cleanup_digest');
     expect(await changesFor(e.id)).toHaveLength(0);
   });
