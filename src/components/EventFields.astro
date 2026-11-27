@@ -221,6 +221,28 @@ const zones = timeZones();
   />
 </fieldset>
 
+<fieldset class="flow form-section">
+  <legend>Call for speakers</legend>
+  <p class="hint">Optional. Add this if the event is looking for speakers.</p>
+  <Field
+    name="cfp_url"
+    label="Link to apply to speak"
+    type="url"
+    value={v.cfp_url}
+    error={e.cfp_url}
+    maxlength={LIMITS.cfpUrl}
+    hint="For example a Sessionize page or a form. Starting with https://"
+  />
+  <Field
+    name="cfp_closes_on"
+    label="Last day to apply"
+    type="date"
+    value={v.cfp_closes_on}
+    error={e.cfp_closes_on}
+    hint="Leave blank if it stays open until the event."
+  />
+</fieldset>
+
 <script>
   // If no time zone is chosen yet, suggest the visitor's own. They can change it.
   const zone = document.querySelector<HTMLSelectElement>('select[name="timezone"]');

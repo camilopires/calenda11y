@@ -115,6 +115,30 @@ describe('types of imported events', () => {
   });
 });
 
+describe('imports and calls for speakers', () => {
+  it('an import update never sets, changes or removes a call for speakers', async () => {
+    const source = await makeSource();
+    await runImport(source, later(), ctxFor([calendar(vevent('c', 'Accessibility Workshop', '20270412T100000Z'))]));
+    const { data: ev } = await db.from('events').select('id').eq('source_id', source.id).single();
+    await db
+      .from('events')
+      .update({ cfp_url: 'https://cfp.example/speak', cfp_closes_on: '2027-04-01' })
+      .eq('id', ev!.id);
+    const r = await runImport(
+      source,
+      later(),
+      ctxFor([calendar(vevent('c', 'Accessibility Workshop renamed', '20270412T100000Z'))]),
+    );
+    expect(r).toMatchObject({ ok: true, counts: { updated: 1 } });
+    const after = (await db.from('events').select('title,cfp_url,cfp_closes_on').eq('id', ev!.id).single()).data!;
+    expect(after).toEqual({
+      title: 'Accessibility Workshop renamed',
+      cfp_url: 'https://cfp.example/speak',
+      cfp_closes_on: '2027-04-01',
+    });
+  });
+});
+
 describe('importing a feed', () => {
   let source: ImportSource;
   beforeAll(async () => {

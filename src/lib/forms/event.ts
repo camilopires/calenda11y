@@ -59,6 +59,8 @@ export const LIMITS = {
   description: 20_000,
   organiser: 200,
   url: 2000,
+  /** Matches the database check on events.cfp_url. */
+  cfpUrl: 500,
   city: 120,
   venue: 300,
   accessNotes: 2000,
@@ -88,6 +90,8 @@ export interface EventFormValues {
   price: string;
   access: string[];
   access_notes: string;
+  cfp_url: string;
+  cfp_closes_on: string;
 }
 
 export interface SubmitterValues {
@@ -122,6 +126,9 @@ export interface EventRecord {
   hearing_loop: boolean;
   remote_attendance: boolean;
   access_notes: string | null;
+  /** Call for speakers: where to apply, and the last day (optional). */
+  cfp_url: string | null;
+  cfp_closes_on: string | null;
 }
 
 const str = (form: FormData, key: string): string => {
@@ -151,6 +158,8 @@ export function readEventForm(form: FormData): EventFormValues {
     price: str(form, 'price'),
     access: form.getAll('access').filter((v): v is string => typeof v === 'string'),
     access_notes: str(form, 'access_notes'),
+    cfp_url: str(form, 'cfp_url'),
+    cfp_closes_on: str(form, 'cfp_closes_on'),
   };
 }
 
@@ -179,6 +188,8 @@ export const EMPTY_EVENT_FORM: EventFormValues = {
   price: '',
   access: [],
   access_notes: '',
+  cfp_url: '',
+  cfp_closes_on: '',
 };
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -303,6 +314,20 @@ export function validateEvent(v: EventFormValues, options: ValidateOptions): Eve
   }
   tooLong('access_notes', 'Access details', v.access_notes, LIMITS.accessNotes);
 
+  // Call for speakers (optional)
+  if (v.cfp_url) {
+    if (v.cfp_url.length > LIMITS.cfpUrl) errors.cfp_url = 'The link must be 500 characters or fewer';
+    else if (!isHttpsUrl(v.cfp_url)) errors.cfp_url = 'Enter the link in full, starting with https://';
+  }
+  if (v.cfp_closes_on) {
+    if (!v.cfp_url) errors.cfp_closes_on = 'Add the link to apply, or remove the date';
+    else if (!isIsoDate(v.cfp_closes_on)) errors.cfp_closes_on = 'Enter the last day as a real date';
+    else if (isIsoDate(v.start_date) && v.cfp_closes_on > v.start_date)
+      errors.cfp_closes_on = 'The last day to apply must be on or before the day the event starts';
+    else if (!options.allowPast && isValidTimeZone(v.timezone) && v.cfp_closes_on < todayIn(v.timezone, options.now))
+      errors.cfp_closes_on = 'That call for speakers has already closed';
+  }
+
   if (Object.keys(errors).length) return { ok: false, errors };
 
   return {
@@ -333,8 +358,15 @@ export function validateEvent(v: EventFormValues, options: ValidateOptions): Eve
       hearing_loop: access.has('hearing_loop'),
       remote_attendance: access.has('remote_attendance'),
       access_notes: v.access_notes || null,
+      cfp_url: v.cfp_url || null,
+      cfp_closes_on: v.cfp_url && v.cfp_closes_on ? v.cfp_closes_on : null,
     },
   };
+}
+
+/** Today's date in a time zone, as YYYY-MM-DD. */
+function todayIn(timeZone: string, now: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
 }
 
 export function validateSubmitter(s: SubmitterValues): FieldErrors {
@@ -400,5 +432,7 @@ export function recordToForm(e: EventRecord & { local_end_date?: string }): Even
     price: e.price,
     access: ACCESS_PROVISIONS.filter((a) => e[a]),
     access_notes: e.access_notes ?? '',
+    cfp_url: e.cfp_url ?? '',
+    cfp_closes_on: e.cfp_closes_on ?? '',
   };
 }

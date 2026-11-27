@@ -154,6 +154,20 @@ test.describe('adding an event', () => {
     await expect(row).toContainText('Workshop');
   });
 
+  test('a call for speakers is optional, checked, and shown on the check page', async ({ page }) => {
+    await page.goto('/submit');
+    await fillEventForm(page, { title: `Speakers wanted ${uniq()}`, startDate: inDays(20) });
+    await page.getByLabel('Link to apply to speak').fill('https://example.org/speak');
+    await page.getByLabel('Last day to apply').fill(inDays(-1));
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.locator('.error-summary')).toContainText('That call for speakers has already closed');
+    await page.getByLabel('Last day to apply').fill(inDays(10));
+    await page.getByRole('button', { name: 'Continue' }).click();
+    const row = page.locator('.check-answers__row', { has: page.getByText('Call for speakers', { exact: true }) });
+    await expect(row).toContainText('Apply by');
+    await expect(row).toContainText('https://example.org/speak');
+  });
+
   test('a tampered check page is refused', async ({ page }) => {
     await page.goto('/submit');
     const res = await page.request.post('/submit', {

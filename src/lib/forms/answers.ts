@@ -9,7 +9,8 @@ import {
   type Format,
   type Price,
 } from '../events/model.ts';
-import { describeWhen } from '../events/dates.ts';
+import { describeWhen, formatLongDate } from '../events/dates.ts';
+import { cfpClosesAt } from '../events/cfp.ts';
 import { fieldId } from './errors.ts';
 import { languageName, type EventFormValues, type EventRecord } from './event.ts';
 
@@ -46,7 +47,15 @@ export function eventAnswerRows(v: EventFormValues, r: EventRecord, localStart: 
       field: fieldId('access'),
     },
     { label: 'Access details', value: r.access_notes ?? '', field: fieldId('access_notes'), lang: r.lang },
+    { label: 'Call for speakers', value: cfpAnswer(r), field: fieldId('cfp_url') },
   ];
+}
+
+/** "Apply by …" and the link, using the same deadline rule as the database. */
+function cfpAnswer(r: EventRecord): string[] | string {
+  const d = cfpClosesAt(r);
+  if (!d || !r.cfp_url) return 'None';
+  return [d.capped ? 'Apply before the event starts' : `Apply by ${formatLongDate(d.lastDay)}`, r.cfp_url];
 }
 
 /** The local first and last day of a checked event (what the database trigger would work out). */

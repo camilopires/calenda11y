@@ -205,3 +205,58 @@ describe('helpers', () => {
     });
   });
 });
+
+describe('call for speakers on the form', () => {
+  // NOW is 2026-11-26; the event is on 2026-12-03 in Lisbon.
+  it('is optional, and saved when given', () => {
+    const none = validateEvent(valid(), { now: NOW });
+    expect(none.ok && none.record).toMatchObject({ cfp_url: null, cfp_closes_on: null });
+    const r = validateEvent(valid({ cfp_url: 'https://cfp.example/apply', cfp_closes_on: '2026-11-30' }), { now: NOW });
+    expect(r.ok && r.record).toMatchObject({ cfp_url: 'https://cfp.example/apply', cfp_closes_on: '2026-11-30' });
+  });
+
+  it.each([
+    [{ cfp_url: 'http://cfp.example' }, 'cfp_url', 'Enter the link in full, starting with https://'],
+    [{ cfp_url: `https://e.example/${'a'.repeat(483)}` }, 'cfp_url', 'The link must be 500 characters or fewer'],
+    [{ cfp_closes_on: '2026-11-30' }, 'cfp_closes_on', 'Add the link to apply, or remove the date'],
+    [
+      { cfp_url: 'https://cfp.example', cfp_closes_on: '2026-02-30' },
+      'cfp_closes_on',
+      'Enter the last day as a real date',
+    ],
+    [
+      { cfp_url: 'https://cfp.example', cfp_closes_on: '2026-12-04' },
+      'cfp_closes_on',
+      'The last day to apply must be on or before the day the event starts',
+    ],
+    [
+      { cfp_url: 'https://cfp.example', cfp_closes_on: '2026-11-25' },
+      'cfp_closes_on',
+      'That call for speakers has already closed',
+    ],
+  ])('%j → %s: %s', (over, field, message) => {
+    const r = validateEvent(valid(over), { now: NOW });
+    expect(!r.ok && r.errors[field]).toBe(message);
+  });
+
+  it('allows exactly 500 characters', () => {
+    const url = `https://e.example/${'a'.repeat(500 - 'https://e.example/'.length)}`;
+    expect(url).toHaveLength(500);
+    expect(validateEvent(valid({ cfp_url: url }), { now: NOW }).ok).toBe(true);
+  });
+
+  it('admins can keep a date that has passed', () => {
+    const r = validateEvent(valid({ cfp_url: 'https://cfp.example', cfp_closes_on: '2026-11-25' }), {
+      now: NOW,
+      allowPast: true,
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it('round-trips through the form', () => {
+    const r = validateEvent(valid({ cfp_url: 'https://cfp.example', cfp_closes_on: '2026-11-30' }), { now: NOW });
+    if (!r.ok) throw new Error('expected valid');
+    expect(recordToForm(r.record)).toMatchObject({ cfp_url: 'https://cfp.example', cfp_closes_on: '2026-11-30' });
+    expect(EMPTY_EVENT_FORM).toMatchObject({ cfp_url: '', cfp_closes_on: '' });
+  });
+});
