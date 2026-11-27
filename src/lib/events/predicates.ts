@@ -49,6 +49,8 @@ export interface Filters {
   when: 'upcoming' | 'past' | 'any';
   /** Internal: only events that ended after this instant (used by feeds). */
   since?: string;
+  /** Internal: only published events whose call for speakers closes after this instant (the deadline feed). */
+  cfpSince?: string;
   page: number;
 }
 
@@ -244,6 +246,7 @@ export function applyFilters<Q extends FilterableQuery>(query: Q, filters: Filte
   if (filters.when === 'past') q = q.lt('end_instant', now);
   else if (filters.when === 'upcoming') q = q.gt('end_instant', now);
   if (filters.since) q = q.gt('end_instant', filters.since);
+  if (filters.cfpSince) q = q.gt('cfp_closes_at', filters.cfpSince).eq('status', 'approved');
 
   const window = dateWindow(filters, today);
   // Overlap: the event's last day is on or after `from`, and its first day is on or before `to`.
@@ -280,6 +283,12 @@ export function filtersToParams(
   const page = overrides.page ?? filters.page;
   if (overrides.includePage !== false && page > 1) p.set('page', String(page));
   return p;
+}
+
+/** The same filters without "open for speakers only" (the deadlines feed shows calls in any state). */
+export function withoutCfp(filters: Filters): Filters {
+  const { cfp: _openOnly, ...rest } = filters;
+  return rest;
 }
 
 /** A plain-language description of the filters, e.g. "online events with live captions". */

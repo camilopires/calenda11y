@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { cfpClosesAt } from '../../src/lib/events/cfp.ts';
 import { parseFilters } from '../../src/lib/events/predicates.ts';
 import { listAllEvents } from '../../src/lib/events/query.ts';
+import { cfpFeedEvents } from '../../src/lib/calendar/feeds.ts';
 import { service } from './helpers.ts';
 
 const db = service();
@@ -172,6 +173,36 @@ describe('the "Open for speakers" filter', () => {
     expect(await open()).toBe(false);
     await db.from('events').update({ status: 'approved' }).eq('id', r.id);
     expect(await open()).toBe(true);
+  });
+});
+
+describe('the calls-for-speakers feed', () => {
+  const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000);
+  const iso = (d: Date) => d.toISOString();
+  const day = (d: Date) => d.toISOString().slice(0, 10);
+
+  it('keeps a recent deadline even when its event has ended, and even from an open-only search', async () => {
+    const ended = await insert({
+      status: 'approved',
+      starts_at: iso(daysAgo(2)),
+      ends_at: iso(daysAgo(1)),
+      cfp_url: 'https://cfp.example/ended',
+      cfp_closes_on: day(daysAgo(5)),
+    });
+    const old = await insert({
+      status: 'approved',
+      starts_at: iso(daysAgo(40)),
+      ends_at: iso(daysAgo(39)),
+      cfp_url: 'https://cfp.example/old',
+      cfp_closes_on: day(daysAgo(45)),
+    });
+    const pending = await insert({ status: 'pending', cfp_url: 'https://cfp.example/pending' });
+    for (const qs of ['type=conference', 'type=conference&cfp=open']) {
+      const ids = (await cfpFeedEvents(parseFilters(new URLSearchParams(qs)).filters)).map((e) => e.id);
+      expect(ids).toContain(ended.id);
+      expect(ids).not.toContain(old.id);
+      expect(ids).not.toContain(pending.id);
+    }
   });
 });
 

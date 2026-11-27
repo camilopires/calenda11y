@@ -13,6 +13,7 @@
  */
 import { TYPE_LABELS, countryName, type PublicEvent } from '../events/model.ts';
 import { zoneCity } from '../events/dates.ts';
+import { cfpDeadline } from '../events/cfp.ts';
 
 export const UID_DOMAIN = 'calenda11y.org';
 export const PRODID = '-//calenda11y//calenda11y.org//EN';
@@ -81,6 +82,8 @@ export function eventDescription(e: PublicEvent, siteUrl: string): string {
   if (e.description) parts.push(e.description);
   if (!e.all_day) parts.push(`Times are for ${zoneCity(e.timezone)} (${e.timezone}).`);
   if (e.url) parts.push(`Event website: ${e.url}`);
+  const cfp = cfpDeadline(e);
+  if (cfp) parts.push(`${cfp}: ${e.cfp_url}`);
   parts.push(`Details on calenda11y: ${eventPageUrl(siteUrl, e.slug)}`);
   return parts.join('\n\n');
 }
@@ -121,6 +124,14 @@ export interface CalendarOptions {
 }
 
 export function buildCalendar(events: readonly PublicEvent[], options: CalendarOptions): string {
+  return calendarDocument(
+    options,
+    events.flatMap((e) => vevent(e, options.siteUrl)),
+  );
+}
+
+/** Wraps VEVENT lines in a complete, folded calendar. */
+export function calendarDocument(options: Omit<CalendarOptions, 'siteUrl'>, vevents: string[]): string {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -131,7 +142,7 @@ export function buildCalendar(events: readonly PublicEvent[], options: CalendarO
     ...(options.description ? [`X-WR-CALDESC:${escapeText(options.description)}`] : []),
     'REFRESH-INTERVAL;VALUE=DURATION:PT6H',
     'X-PUBLISHED-TTL:PT6H',
-    ...events.flatMap((e) => vevent(e, options.siteUrl)),
+    ...vevents,
     'END:VCALENDAR',
   ];
   return lines.map(foldLine).join(CRLF) + CRLF;

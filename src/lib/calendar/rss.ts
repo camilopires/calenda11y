@@ -1,6 +1,7 @@
 /** An RSS 2.0 feed of events. */
 import { TYPE_LABELS, type PublicEvent } from '../events/model.ts';
 import { describeWhen } from '../events/dates.ts';
+import { cfpDeadline } from '../events/cfp.ts';
 import { eventLocation, eventPageUrl } from './ics.ts';
 
 export function escapeXml(value: string): string {
@@ -27,7 +28,8 @@ export function buildRss(events: readonly PublicEvent[], o: FeedOptions): string
   const items = events.map((e) => {
     const when = describeWhen(e);
     const link = eventPageUrl(o.siteUrl, e.slug);
-    const desc = `${when.date}, ${when.time}. ${eventLocation(e)}. ${e.summary}`;
+    const cfp = cfpDeadline(e);
+    const desc = `${when.date}, ${when.time}. ${eventLocation(e)}. ${e.summary}${cfp ? ` ${cfp}: ${e.cfp_url}` : ''}`;
     return [
       '    <item>',
       `      <title>${escapeXml(e.status === 'cancelled' ? `Cancelled: ${e.title}` : e.title)}</title>`,

@@ -1,9 +1,10 @@
 /** Shared logic for the ICS and RSS feeds. */
 import { env } from '../env.ts';
 import type { PublicEvent } from '../events/model.ts';
-import { describeFilters, parseFilters, type Filters } from '../events/predicates.ts';
+import { describeFilters, parseFilters, withoutCfp, type Filters } from '../events/predicates.ts';
 import { clock, listAllEvents, type Clock } from '../events/query.ts';
 import { buildCalendar } from './ics.ts';
+import { buildCfpCalendar } from './cfpFeed.ts';
 
 const DAY = 86_400_000;
 /** Keep events that ended recently, so subscribed calendars don't drop them as soon as they finish. */
@@ -53,4 +54,30 @@ export function parseFeedFilters(params: URLSearchParams) {
   p.delete('page');
   p.delete('when');
   return parseFilters(p);
+}
+
+/** Past deadlines stay in the calls-for-speakers feed this long, like ended events. */
+export const KEEP_CLOSED_CFP_DAYS = 30;
+
+/**
+ * Events for the calls-for-speakers feed. It ignores "upcoming only" and
+ * "open only": a deadline that has just passed, or whose event has ended,
+ * stays for 30 days so subscribed calendars don't drop it straight away.
+ */
+export async function cfpFeedEvents(filters: Filters, c: Clock = clock()): Promise<PublicEvent[]> {
+  const cfpSince = new Date(Date.parse(c.now) - KEEP_CLOSED_CFP_DAYS * DAY).toISOString();
+  const { since: _since, ...rest } = withoutCfp(filters);
+  return listAllEvents({ ...rest, when: 'any', cfpSince, page: 1 }, c);
+}
+
+export async function cfpIcsResponse(filters: Filters): Promise<Response> {
+  const d = describeFilters(withoutCfp(filters));
+  const body = buildCfpCalendar(await cfpFeedEvents(filters), {
+    name: d === 'all events' ? 'calenda11y: calls for speakers' : `calenda11y: calls for speakers, ${d}`,
+    description: 'Deadlines to apply to speak at accessibility events, from calenda11y.',
+    siteUrl: env().SITE_URL,
+  });
+  return new Response(body, {
+    headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'Cache-Control': FEED_CACHE },
+  });
 }

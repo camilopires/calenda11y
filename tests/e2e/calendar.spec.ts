@@ -159,4 +159,25 @@ test.describe('calendar integrations', () => {
     const details = page.locator('dl.details-list');
     await expect(details).toContainText('Conference, Workshop');
   });
+  test('the speaking deadlines feed has one all-day entry per call, and takes filters', async ({ page, request }) => {
+    const res = await request.get('/feeds/cfp.ics');
+    expect(res.status()).toBe(200);
+    expect(res.headers()['content-type']).toContain('text/calendar');
+    const entries = parseIcs(await res.text());
+    const summaries = entries.map((e) => e.summary);
+    expect(summaries).toContain('Call for speakers closes: Nordic Accessibility Summit');
+    expect(summaries).toContain('Call for speakers closes when the event starts: Nairobi Inclusive Tech Day');
+    // Closed a few days ago: still there, so calendars don't drop it straight away.
+    expect(summaries).toContain('Call for speakers closes: WCAG 2.2 in practice');
+    for (const e of entries) expect(e.startDate.isDate).toBe(true);
+
+    const conferences = parseIcs(await (await request.get('/feeds/cfp.ics?type=conference')).text());
+    expect(conferences.map((e) => e.summary).some((t) => t.includes('Tokyo'))).toBe(false);
+    expect((await request.get('/feeds/cfp.ics?type=party')).status()).toBe(400);
+
+    await page.goto('/subscribe?type=conference&cfp=open');
+    const address = await page.getByLabel('Speaking deadlines feed address').inputValue();
+    expect(address).toMatch(/\/feeds\/cfp\.ics\?type=conference$/);
+    await expectNoAxeViolations(page, 'subscribe with deadlines');
+  });
 });

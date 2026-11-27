@@ -3,7 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import ErrorSummary from '../../components/ErrorSummary.astro';
 import { webcalUrl } from '../../lib/calendar/links';
 import { env } from '../../lib/env';
-import { describeFilters, filtersToParams } from '../../lib/events/predicates';
+import { describeFilters, filtersToParams, withoutCfp } from '../../lib/events/predicates';
 import { parseFeedFilters } from '../../lib/calendar/feeds';
 import { countryCounts } from '../../lib/events/query';
 import { countryName } from '../../lib/events/model';
@@ -13,6 +13,9 @@ const qs = filtersToParams(filters, { includePage: false }).toString();
 const site = env().SITE_URL;
 const feedPath = qs ? `/feeds/events.ics?${qs}` : '/feeds/all.ics';
 const feedUrl = new URL(feedPath, site).href;
+// The deadlines feed shows calls whatever their state, so "open only" isn't carried over.
+const cfpParams = filtersToParams(withoutCfp(filters), { includePage: false });
+const cfpFeedUrl = new URL(`/feeds/cfp.ics${cfpParams.size ? `?${cfpParams}` : ''}`, site).href;
 const rssUrl = new URL(qs ? `/feeds/events.rss?${qs}` : '/feeds/events.rss', site).href;
 const description = describeFilters(filters);
 const topCountries = (await countryCounts()).sort((a, b) => b.upcoming - a.upcoming).slice(0, 8);
@@ -69,6 +72,26 @@ const topCountries = (await countryCounts()).sort((a, b) => b.upcoming - a.upcom
       <li>Choose "Subscribe in my calendar app" above. Calendar opens and asks you to confirm.</li>
       <li>On an iPhone or iPad, choose "Subscribe" when asked.</li>
     </ol>
+  </section>
+
+  <section aria-labelledby="cfp-sub" class="flow">
+    <h2 id="cfp-sub">Calls for speakers</h2>
+    <p>
+      Put the last day to apply to speak at each event in your calendar, as an all-day entry. It follows the same
+      country, format and type choices as above.
+    </p>
+    <p>
+      <a class="button" href={webcalUrl(cfpFeedUrl)}>
+        Add speaking deadlines to my calendar
+      </a>
+    </p>
+    <div class="field">
+      <label for="cfp-feed-url">Speaking deadlines feed address</label>
+      <p class="hint" id="cfp-feed-url-hint">
+        Copy this if your calendar app asks for a web address (URL).
+      </p>
+      <input id="cfp-feed-url" type="url" readonly value={cfpFeedUrl} aria-describedby="cfp-feed-url-hint" />
+    </div>
   </section>
 
   <section aria-labelledby="email-sub" class="flow">
