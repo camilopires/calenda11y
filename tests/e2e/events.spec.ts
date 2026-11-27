@@ -20,6 +20,8 @@ const PAGES = [
   '/topics/careers',
   '/?topic=assistive-technology',
   '/?topic=nope',
+  '/?near=Chatham%2C%20Kent%2C%20United%20Kingdom&at=51.3807,0.5214&u=mi&within=25',
+  '/?near=Medway',
   '/calendar',
   '/calendar?month=2026-13',
   '/calendar?country=online',
@@ -263,6 +265,58 @@ test.describe('event pages', () => {
   test('"More filters" counts the topics chosen', async ({ page }) => {
     await page.goto('/?topic=testing&topic=law&access=captions');
     await expect(page.locator('details.filters__more summary')).toHaveText(/More filters: 3 chosen/);
+  });
+
+  test('near me works without JavaScript: one match goes straight to results, with distances', async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false, baseURL: baseURL! });
+    const page = await context.newPage();
+    await page.goto('/');
+    // A normal search with "Within" left alone is fine.
+    await page.getByRole('button', { name: 'Show events' }).click();
+    await expect(page.locator('.error-summary')).toHaveCount(0);
+    await page.getByLabel('Near').fill('Chatham');
+    await page.getByRole('button', { name: 'Show events' }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('at')).toBe('51.3807,0.5214');
+    await expect(page.locator('#results-count')).toContainText('within 25 miles of Chatham, Kent, United Kingdom');
+    const card = page.locator('.event', { hasText: 'Chatham accessibility evening' });
+    await expect(card).toContainText('under 1 mile away');
+    await expect(page.getByRole('link', { name: 'Lisbon Inclusive Design Meetup' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'OpenStreetMap' })).toBeVisible();
+    // Online events only when asked for.
+    await expect(page.getByRole('link', { name: /Online accessibility talk/ })).toHaveCount(0);
+    await page.getByRole('checkbox', { name: 'Also show online events' }).check();
+    await page.getByRole('button', { name: 'Show events' }).click();
+    await expect(page.getByRole('link', { name: /Online accessibility talk/ }).first()).toBeVisible();
+    // Changing the place looks it up again; clearing it drops the place.
+    await page.getByLabel('Near').fill('Lisbon');
+    await page.getByRole('button', { name: 'Show events' }).click();
+    await expect(page.locator('#results-count')).toContainText('within 25 km of Lisbon, Portugal');
+    await expect(page.getByRole('link', { name: 'Lisbon Inclusive Design Meetup' })).toBeVisible();
+    await page.getByLabel('Near').fill('');
+    await page.getByRole('button', { name: 'Show events' }).click();
+    await expect(page.locator('#results-count')).not.toContainText('within');
+    await context.close();
+  });
+
+  test('an ambiguous place asks which one; an unknown one says so', async ({ page }) => {
+    await page.goto('/?near=Medway');
+    const which = page.getByRole('region', { name: 'Which Medway?' });
+    await expect(which).toBeFocused();
+    await which.getByRole('link', { name: 'Medway, Kent, United Kingdom' }).click();
+    await expect(page.locator('#results-count')).toContainText('within 25 miles of Medway, Kent, United Kingdom');
+    await expect(page.locator('.event', { hasText: 'Chatham accessibility evening' })).toContainText(/miles? away/);
+    await page.goto('/?near=Atlantis');
+    await expect(page.locator('.error-summary')).toContainText("We couldn't find that place");
+  });
+
+  test('a shared place link works as it is, without looking anything up', async ({ page }) => {
+    await page.goto('/?near=Nowhere%20Town&at=51.38,0.52&u=mi&within=25');
+    await expect(page.locator('.error-summary')).toHaveCount(0);
+    await expect(page.locator('#results-count')).toContainText('within 25 miles of Nowhere Town');
+    await expect(page.getByRole('link', { name: 'Chatham accessibility evening' })).toBeVisible();
   });
 
   test('access provision filters need every chosen provision', async ({ page }) => {

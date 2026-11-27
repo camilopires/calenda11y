@@ -13,6 +13,7 @@ import { applyFilters, type Filters } from '../events/predicates.ts';
 import { clock, type Clock } from '../events/query.ts';
 import { unwrap } from '../result.ts';
 import { reasonLines, type ChangeReason } from './changes.ts';
+import { withinNear } from '../geo/distance.ts';
 
 const DAYS = 30;
 /** Entries in the feed, at most. */
@@ -113,7 +114,8 @@ async function matchingEvents(ids: string[], filters: Filters, c: Clock): Promis
       'supabase',
       'reading recent events',
     ) as unknown as PublicEvent[];
-    for (const e of rows) events.set(e.id, e);
+    // The database narrows to a box; this is the exact distance.
+    for (const e of rows) if (!filters.near || withinNear(e, filters.near)) events.set(e.id, e);
   }
   return events;
 }

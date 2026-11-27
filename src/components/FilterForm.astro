@@ -16,6 +16,7 @@ import {
   topicFromSlug,
 } from '../lib/events/model';
 import { formatMonthYear, isIsoMonth, monthOptions, todayUtc } from '../lib/events/dates';
+import { RADII } from '../lib/geo/distance';
 import type { CountryCount } from '../lib/events/query';
 import type { FilterValues } from '../lib/events/predicates';
 
@@ -69,6 +70,10 @@ const moreCount =
   values.access.length +
   (!monthChosen && values.from ? 1 : 0) +
   (!monthChosen && values.to ? 1 : 0);
+
+// "Within" reads in the place's unit; miles until a place says otherwise.
+const unitWord = values.unit === 'km' && values.at ? 'km' : 'miles';
+const nearResolved = !!values.near && !!values.at && !errors.near;
 
 // This month and the next 11 (or the previous 11 for past events). A month
 // from a shared link that isn't in the list is added, so the select shows it.
@@ -130,7 +135,44 @@ if (monthChosen && !months.some((m) => m.value === values.range)) {
         { value: 'paid', label: 'Paid' },
       ]}
     />
+    <Field
+      name="near"
+      label="Near"
+      type="search"
+      value={values.near}
+      error={errors.near}
+      maxlength={100}
+      hint="A town, city or postcode"
+      showOptional={false}
+    />
+    <Field
+      name="within"
+      label="Within"
+      type="select"
+      value={values.within || (values.near ? '25' : '')}
+      error={errors.within}
+      showOptional={false}
+      options={[
+        // Without a place there's nothing to measure from.
+        ...(values.near ? [] : [{ value: '', label: 'Any distance' }]),
+        ...RADII.map((r) => ({ value: String(r), label: `${r} ${unitWord}` })),
+      ]}
+    />
   </div>
+  {/* The place the search was last looked up from, so an edited "Near" is looked up again and a resubmit isn't. */}
+  {nearResolved && (
+    <>
+      <input type="hidden" name="at" value={values.at} />
+      <input type="hidden" name="u" value={values.unit} />
+      <input type="hidden" name="near_from" value={values.near} />
+    </>
+  )}
+  {values.near && (
+    <div class="choice">
+      <input type="checkbox" id="f-online-include" name="online" value="include" checked={values.includeOnline} />
+      <label for="f-online-include">Also show online events</label>
+    </div>
+  )}
 
   <div class="filters__kinds">
     <ChoiceGroup

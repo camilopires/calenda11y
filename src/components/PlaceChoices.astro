@@ -1,0 +1,23 @@
+---
+/** "Which Medway?": one link per matching place. */
+interface Props {
+  near: string;
+  choices: Array<{ label: string; href: string }>;
+}
+const { near, choices } = Astro.props;
+---
+
+<section class="notice flow-tight" aria-labelledby="which-place" tabindex="-1" data-focus-on-load>
+  <h2 id="which-place">Which {near}?</h2>
+  <p>We found more than one place with that name. Choose one:</p>
+  <ul>
+    {choices.map((c) => (
+      <li>
+        <a href={c.href}>{c.label}</a>
+      </li>
+    ))}
+  </ul>
+  <p class="small">
+    Place search by <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>.
+  </p>
+</section>

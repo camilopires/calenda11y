@@ -37,6 +37,10 @@ class Recorder implements FilterableQuery {
     this.calls.push(['lt', c, v]);
     return this;
   }
+  or(expr: string) {
+    this.calls.push(['or', expr]);
+    return this;
+  }
   overlaps(c: string, v: readonly unknown[]) {
     this.calls.push(['overlaps', c, v]);
     return this;
@@ -327,6 +331,73 @@ describe('topic filter', () => {
     );
     expect(describeFilters(parse('topic=law&topic=testing').filters)).toBe(
       'events about testing and auditing or law and compliance',
+    );
+  });
+});
+
+describe('near filter', () => {
+  it('uses the position in the link, in the unit given, without looking anything up', () => {
+    const p = parse('near=Chatham%2C%20Kent&at=51.38,0.52&u=mi&within=25');
+    expect(p.errors).toEqual({});
+    expect(p.lookup).toBeUndefined();
+    expect(p.filters.near).toMatchObject({ lat: 51.38, lng: 0.52, radius: 25, unit: 'mi', label: 'Chatham, Kent' });
+    expect(p.filters.near!.km).toBeCloseTo(40.23, 1);
+    expect(p.active).toBe(true);
+  });
+
+  it('asks for a lookup when there is no position yet, or the text was edited', () => {
+    expect(parse('near=Medway').lookup).toBe('Medway');
+    expect(parse('near=Medway').filters.near).toBeUndefined();
+    expect(parse('near=Maidstone&near_from=Chatham&at=51.38,0.52&u=mi').lookup).toBe('Maidstone');
+    // A shared link has no near_from, so its label is taken as it is.
+    expect(parse('near=Nowhere%20Town&at=51.38,0.52&u=mi').lookup).toBeUndefined();
+  });
+
+  it('a cleared place, or a distance on its own, means no place filter', () => {
+    expect(parse('near=&near_from=Chatham&at=51.38,0.52').filters.near).toBeUndefined();
+    const lonely = parse('within=25');
+    expect(lonely.errors).toEqual({});
+    expect(lonely.filters.near).toBeUndefined();
+  });
+
+  it('defaults to 25, and refuses odd distances and broken links', () => {
+    expect(parse('near=Chatham&at=51.38,0.52&u=mi').filters.near!.radius).toBe(25);
+    expect(parse('near=Chatham&at=51.38,0.52&within=7').errors.within).toBe('Choose a distance from the list');
+    expect(parse('near=Chatham&at=99,0.52').errors.near).toBe(
+      "That place link doesn't work. Search for the place again",
+    );
+  });
+
+  it('filters with a box (and online events when asked), and round-trips', () => {
+    const p = parse('near=Chatham&at=51.38,0.52&u=mi&within=10&online=include');
+    const r = new Recorder();
+    applyFilters(r, p.filters, '2026-11-27T12:00:00Z', '2026-11-27');
+    const or = r.calls.find((c) => c[0] === 'or')![1] as string;
+    expect(or).toMatch(
+      /^and\(lat\.gte\.[\d.]+,lat\.lte\.[\d.]+,lng\.gte\.[\d.-]+,lng\.lte\.[\d.]+\),format\.eq\.online$/,
+    );
+    const back = filtersToParams(p.filters);
+    expect(Object.fromEntries(back)).toMatchObject({
+      near: 'Chatham',
+      at: '51.38,0.52',
+      u: 'mi',
+      within: '10',
+      online: 'include',
+    });
+  });
+
+  it('splits the box at the date line in the query', () => {
+    const r = new Recorder();
+    applyFilters(r, parse('near=Fiji&at=-17.7,179.9&within=100').filters, '2026-11-27T12:00:00Z', '2026-11-27');
+    const or = r.calls.find((c) => c[0] === 'or')![1] as string;
+    expect(or).toContain('or(and(lng.gte.');
+    expect(or).toContain('lng.lte.180');
+    expect(or).toContain('lng.gte.-180');
+  });
+
+  it('is described in words', () => {
+    expect(describeFilters(parse('near=Chatham%2C%20Kent&at=51.38,0.52&u=mi&within=25').filters)).toBe(
+      'events within 25 miles of Chatham, Kent',
     );
   });
 });

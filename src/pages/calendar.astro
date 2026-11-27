@@ -15,6 +15,9 @@ import {
 import { buildMonthGrid } from '../lib/events/grid';
 import { filtersToParams, parseFilters } from '../lib/events/predicates';
 import { clock, countryCounts, listAllEvents } from '../lib/events/query';
+import { resolveNear } from '../lib/geo/resolve';
+import { clientIp } from '../lib/security/ratelimit';
+import PlaceChoices from '../components/PlaceChoices.astro';
 
 const c = clock();
 const params = new URLSearchParams(Astro.url.searchParams);
@@ -30,6 +33,14 @@ if (monthParam) {
 for (const k of ['month', 'range', 'from', 'to', 'when', 'page']) params.delete(k);
 const parsed = parseFilters(params);
 Object.assign(errors, parsed.errors);
+// A typed place is looked up here (once; then it's in the link).
+let choices: Array<{ label: string; href: string }> | undefined;
+if (parsed.lookup) {
+  const r = await resolveNear(parsed.lookup, Astro.url, clientIp(Astro.request, Astro.clientAddress));
+  if (r.kind === 'redirect') return Astro.redirect(r.href, 303);
+  if (r.kind === 'choose') choices = r.choices;
+  else errors.near = r.message;
+}
 
 const first = `${month}-01`;
 const gridStart = addDays(first, -weekdayIndex(first));
@@ -75,6 +86,7 @@ const listQs = keep.toString();
 
   <ErrorSummary errors={errors} targets={{ month: 'month-nav', format: 'f-format', access: 'f-access' }} />
 
+  {choices && <PlaceChoices near={parsed.values.near} choices={choices} />}
   <FilterForm
     values={parsed.values}
     errors={errors}

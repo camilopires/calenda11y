@@ -59,7 +59,15 @@ describe('distances', () => {
   });
 
   it('withinNear is exact: inside the box but outside the circle is out', () => {
-    const near = { lat: 51.38, lng: 0.52, km: 40, unit: 'mi' as const, label: 'Chatham', includeOnline: false };
+    const near = {
+      lat: 51.38,
+      lng: 0.52,
+      km: 40,
+      radius: 25,
+      unit: 'mi' as const,
+      label: 'Chatham',
+      includeOnline: false,
+    };
     expect(withinNear({ format: 'in_person', lat: 51.5, lng: 0.6 }, near)).toBe(true);
     const corner = destination({ lat: 51.38, lng: 0.52 }, 40 * 1.3, 45);
     expect(inBox(corner, boundingBox(near, 40))).toBe(true);

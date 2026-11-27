@@ -8,11 +8,32 @@ import TimeZoneToggle from '../components/TimeZoneToggle.astro';
 import { t } from '../i18n/t';
 import { TYPE_PLURALS, countryName } from '../lib/events/model';
 import { formatMonthYear } from '../lib/events/dates';
-import { aboutTopics, filtersToParams, parseFilters, ONLINE } from '../lib/events/predicates';
+import { aboutTopics, filtersToParams, parseFilters, withinWords, ONLINE } from '../lib/events/predicates';
+import { formatDistance, haversineKm } from '../lib/geo/distance';
+import { resolveNear } from '../lib/geo/resolve';
+import { clientIp } from '../lib/security/ratelimit';
+import PlaceChoices from '../components/PlaceChoices.astro';
 import { countryCounts, listEvents } from '../lib/events/query';
 
-const { filters, values, errors, active } = parseFilters(Astro.url.searchParams);
+const parsed = parseFilters(Astro.url.searchParams);
+const { filters, values, active } = parsed;
+const errors = { ...parsed.errors };
+// A typed place is looked up here (once; then it's in the link).
+let choices: Array<{ label: string; href: string }> | undefined;
+if (parsed.lookup) {
+  const r = await resolveNear(parsed.lookup, Astro.url, clientIp(Astro.request, Astro.clientAddress));
+  if (r.kind === 'redirect') return Astro.redirect(r.href, 303);
+  if (r.kind === 'choose') choices = r.choices;
+  else errors.near = r.message;
+}
 const [result, countries] = await Promise.all([listEvents(filters), countryCounts()]);
+const near = filters.near;
+const distance = near
+  ? (e: { lat: number | null; lng: number | null; format: string }) =>
+      e.format !== 'online' && e.lat !== null && e.lng !== null
+        ? `${formatDistance(haversineKm(near, { lat: e.lat, lng: e.lng }), near.unit)} away`
+        : undefined
+  : undefined;
 const past = filters.when === 'past';
 
 const pageHref = (n: number) => {
@@ -30,11 +51,12 @@ const kind = filters.when === 'any' ? '' : past ? 'past ' : 'upcoming ';
 const plural = filters.types.length ? filters.types.map((ty) => TYPE_PLURALS[ty]).join(' or ') : 'events';
 const inMonth = filters.range === 'month' && filters.month ? ` in ${formatMonthYear(filters.month)}` : '';
 const speaking = filters.cfp ? ' with an open call for speakers' : '';
+const nearWords = near ? ` ${withinWords(near)}` : '';
 const about = filters.topics.length ? ` ${aboutTopics(filters.topics)}` : '';
 const countText =
   result.total === 0
-    ? `No ${kind}${plural} found${about}${where}${inMonth}${speaking}`
-    : `${result.total} ${kind}${result.total === 1 ? 'event' : plural}${about}${where}${inMonth}${speaking}` +
+    ? `No ${kind}${plural} found${about}${where}${nearWords}${inMonth}${speaking}`
+    : `${result.total} ${kind}${result.total === 1 ? 'event' : plural}${about}${where}${nearWords}${inMonth}${speaking}` +
       (result.pages > 1 ? `. Page ${result.page} of ${result.pages}` : '');
 ---
 
@@ -56,13 +78,15 @@ const countText =
 
   <ErrorSummary errors={errors} targets={{ format: 'f-format', access: 'f-access' }} />
 
+  {choices && <PlaceChoices near={values.near} choices={choices} />}
+
   <FilterForm values={values} errors={errors} countries={countries} mode="list" action="/" past={past} />
 
   <div class="results-bar">
     <p
       id="results-count"
       tabindex="-1"
-      data-focus-on-load={active && Object.keys(errors).length === 0 ? '' : undefined}
+      data-focus-on-load={active && Object.keys(errors).length === 0 && !choices ? '' : undefined}
     >
       <strong>{countText}</strong>
     </p>
@@ -80,10 +104,16 @@ const countText =
     </p>
   </div>
 
+  {near && (
+    <p class="small">
+      Place search by <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>.
+    </p>
+  )}
+
   {result.events.length > 0 && <TimeZoneToggle />}
 
   {result.events.length > 0 ? (
-    <EventList events={result.events} />
+    <EventList events={result.events} distance={distance} />
   ) : (
     <div class="notice flow-tight">
       <p>Try fewer filters, or search for a different word.</p>

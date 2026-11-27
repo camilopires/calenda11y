@@ -243,4 +243,13 @@ test.describe('calendar integrations', () => {
       await service().from('events').delete().eq('id', ev!.id);
     }
   });
+  test('feeds take a place from the link, and never look one up', async ({ request }) => {
+    const near = parseIcs(
+      await (await request.get('/feeds/events.ics?at=51.3807,0.5214&u=mi&within=25&near=Chatham')).text(),
+    );
+    expect(near.map((e) => e.summary)).toEqual(['Chatham accessibility evening']);
+    // A place with no position is ignored by feeds, not looked up.
+    const typed = await request.get('/feeds/events.ics?near=Medway');
+    expect(typed.status()).toBe(200);
+  });
 });

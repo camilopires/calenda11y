@@ -15,8 +15,10 @@ import {
 interface Props {
   event: PublicEvent;
   headingLevel?: 2 | 3;
+  /** "12 miles away", for near-me results. */
+  distance?: string | undefined;
 }
-const { event, headingLevel = 3 } = Astro.props;
+const { event, headingLevel = 3, distance } = Astro.props;
 const block = dateBlockParts(event.local_start_date);
 const Heading = `h${headingLevel}` as 'h2' | 'h3';
 const where =
@@ -46,6 +48,7 @@ const cfp = cfpStatus(event, new Date());
       <EventTime event={event} />
     </p>
     <p class="event__meta">
+      {distance && <>{distance}. </>}
       {where}
       {event.organiser && <>. Run by {event.organiser}</>}
     </p>

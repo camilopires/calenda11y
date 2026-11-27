@@ -5,8 +5,10 @@ import type { PublicEvent } from '../lib/events/model';
 
 interface Props {
   events: PublicEvent[];
+  /** For near-me results: "12 miles away". */
+  distance?: ((e: PublicEvent) => string | undefined) | undefined;
 }
-const { events } = Astro.props;
+const { events, distance } = Astro.props;
 const months: Array<{ month: string; events: PublicEvent[] }> = [];
 for (const e of events) {
   const m = monthOf(e.local_start_date);
@@ -24,7 +26,7 @@ for (const e of events) {
     <ul class="event-list">
       {group.events.map((e) => (
         <li>
-          <EventCard event={e} />
+          <EventCard event={e} distance={distance?.(e)} />
         </li>
       ))}
     </ul>

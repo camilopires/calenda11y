@@ -56,6 +56,8 @@ test.describe('target size', () => {
     '/topics',
     '/topics/testing',
     '/?topic=assistive-technology',
+    '/?near=Chatham%2C%20Kent%2C%20United%20Kingdom&at=51.3807,0.5214&u=mi&within=25',
+    '/?near=Medway',
   ]) {
     test(`${path}: every target is at least 44 × 44`, async ({ page }) => {
       await page.goto(path);

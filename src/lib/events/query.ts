@@ -4,6 +4,7 @@ import { unwrap, unwrapMaybe } from '../result.ts';
 import { todayUtc } from './dates.ts';
 import { PUBLIC_EVENT_COLUMNS, type EventTopic, type PublicEvent } from './model.ts';
 import { applyFilters, type Filters } from './predicates.ts';
+import { withinNear } from '../geo/distance.ts';
 
 export const PAGE_SIZE = 30;
 /** Rows fetched per request when reading a complete result set. */
@@ -39,6 +40,17 @@ const ascending = (filters: Filters) => filters.when !== 'past';
 /** One page of events matching the filters. */
 export async function listEvents(filters: Filters, c: Clock = clock()): Promise<EventPage> {
   const from = (filters.page - 1) * PAGE_SIZE;
+  if (filters.near) {
+    // The database narrows to a box; the exact distance is checked here, so
+    // near-me results are read in full and paged in memory (there are few).
+    const all = await listAllEvents(filters, c);
+    return {
+      events: all.slice(from, from + PAGE_SIZE),
+      total: all.length,
+      page: filters.page,
+      pages: Math.ceil(all.length / PAGE_SIZE),
+    };
+  }
   const result = await baseQuery(filters, c, true)
     .order('start_instant', { ascending: ascending(filters) })
     .order('id', { ascending: true })
@@ -67,7 +79,8 @@ export async function listAllEvents(filters: Filters, c: Clock = clock()): Promi
       'supabase',
       'reading all events',
     ) as unknown as PublicEvent[];
-    out.push(...rows);
+    const near = filters.near;
+    out.push(...(near ? rows.filter((e) => withinNear(e, near)) : rows));
     if (rows.length < CHUNK_SIZE) return out;
   }
   throw new Error(`More than ${MAX_COMPLETE_ROWS} events matched; refusing to return a truncated list`);

@@ -25,6 +25,8 @@ import {
   type Price,
 } from './model.ts';
 import { addDays, addMonths, endOfMonth, formatMonthYear, isIsoDate, isIsoMonth } from './dates.ts';
+import { RADII, boundingBox, toKm, type NearFilter, type Unit } from '../geo/distance.ts';
+import { formatAt, parseAt } from '../geo/place.ts';
 
 /** The named ranges a URL can ask for. A month is given as `range=YYYY-MM`. */
 export const RANGES = ['upcoming', 'this-month', '3-months', 'custom'] as const;
@@ -43,6 +45,8 @@ export interface Filters {
   cfp?: true;
   /** About any of these topics (empty: no topic filter). */
   topics: EventTopic[];
+  /** Near a place (a position from the link; nothing is looked up here). */
+  near?: NearFilter;
   range: Range;
   /** YYYY-MM, only for range = month. */
   month?: string;
@@ -69,6 +73,13 @@ export interface FilterValues {
   /** URL names (assistive-technology), whichever spelling came in, so the right boxes are ticked. */
   topics: string[];
   cfp: boolean;
+  /** The place typed, the place it was last resolved from, its position, unit, distance and online choice. */
+  near: string;
+  nearFrom: string | null;
+  at: string;
+  unit: Unit;
+  within: string;
+  includeOnline: boolean;
   range: string;
   from: string;
   to: string;
@@ -83,6 +94,8 @@ export interface ParsedFilters {
   errors: FieldErrors;
   /** True if any filter was given, so the page can move focus to the results. */
   active: boolean;
+  /** A place to look up first (typed, or edited since it was last looked up). The page does that, not this parser. */
+  lookup?: string;
 }
 
 export const MAX_QUERY_LENGTH = 100;
@@ -105,6 +118,12 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
       return topic ? TOPIC_SLUGS[topic] : t;
     }),
     cfp: params.get('cfp') === 'open',
+    near: (params.get('near') ?? '').trim().slice(0, 100),
+    nearFrom: params.get('near_from'),
+    at: params.get('at') ?? '',
+    unit: params.get('u') === 'mi' ? 'mi' : 'km',
+    within: params.get('within') ?? '',
+    includeOnline: params.get('online') === 'include',
     range: params.get('range') ?? '',
     from: params.get('from') ?? '',
     to: params.get('to') ?? '',
@@ -139,6 +158,26 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
     errors.type = 'Choose a type from the list';
   }
   filters.types = EVENT_TYPES.filter((t) => values.types.includes(t));
+
+  // Near a place. Without a place, a distance on its own means nothing.
+  let lookup: string | undefined;
+  if (values.near) {
+    const radius = values.within === '' ? 25 : Number(values.within);
+    if (!(RADII as readonly number[]).includes(radius)) errors.within = 'Choose a distance from the list';
+    const pos = parseAt(values.at);
+    if (values.at && !pos) errors.near = "That place link doesn't work. Search for the place again";
+    else if (!pos || (values.nearFrom !== null && values.nearFrom !== values.near)) lookup = values.near;
+    else if (!errors.within) {
+      filters.near = {
+        ...pos,
+        radius,
+        km: toKm(radius, values.unit),
+        unit: values.unit,
+        label: values.near,
+        includeOnline: values.includeOnline,
+      };
+    }
+  }
 
   const chosenTopics = params.getAll('topic').map(topicFromSlug);
   if (chosenTopics.includes(null)) errors.topic = 'Choose a topic from the list';
@@ -214,10 +253,21 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
     else errors.page = 'That page number does not exist';
   }
 
-  const active = ['country', 'format', 'type', 'topic', 'cfp', 'range', 'from', 'to', 'price', 'access', 'q'].some(
-    (k) => params.has(k),
-  );
-  return { filters, values, errors, active };
+  const active = [
+    'country',
+    'format',
+    'type',
+    'topic',
+    'cfp',
+    'near',
+    'range',
+    'from',
+    'to',
+    'price',
+    'access',
+    'q',
+  ].some((k) => params.has(k));
+  return { filters, values, errors, active, ...(lookup && { lookup }) };
 }
 
 /** The inclusive local-date window a filter covers, if it has one. */
@@ -245,6 +295,7 @@ export interface FilterableQuery {
   gt(column: string, value: unknown): this;
   lt(column: string, value: unknown): this;
   overlaps(column: string, values: readonly unknown[]): this;
+  or(filters: string): this;
   textSearch(column: string, query: string, options: { type: 'websearch'; config: string }): this;
 }
 
@@ -266,6 +317,7 @@ export function applyFilters<Q extends FilterableQuery>(query: Q, filters: Filte
   if (formats) q = q.in('format', formats);
   if (filters.types.length) q = q.overlaps('types', filters.types);
   if (filters.topics.length) q = q.overlaps('topics', filters.topics);
+  if (filters.near) q = q.or(nearCondition(filters.near));
   // Cancelled events are public too, but their calls aren't open.
   if (filters.cfp) q = q.gt('cfp_closes_at', now).eq('status', 'approved');
 
@@ -285,6 +337,20 @@ export function applyFilters<Q extends FilterableQuery>(query: Q, filters: Filte
   return q;
 }
 
+/**
+ * A box around the place (the exact distance is checked afterwards, in
+ * query.ts), as a PostgREST "or" expression; online events too when asked
+ * for. Two longitude ranges when the box crosses the date line.
+ */
+export function nearCondition(near: NearFilter): string {
+  const box = boundingBox(near, near.km);
+  const n = (x: number) => Number(x.toFixed(6));
+  const lng = box.lngRanges.map(([lo, hi]) => `lng.gte.${n(lo)},lng.lte.${n(hi)}`);
+  const lngPart = lng.length === 1 ? lng[0] : `or(${lng.map((r) => `and(${r})`).join(',')})`;
+  const inBox = `and(lat.gte.${n(box.minLat)},lat.lte.${n(box.maxLat)},${lngPart})`;
+  return near.includeOnline ? `${inBox},format.eq.online` : inBox;
+}
+
 /** Builds a query string for the given filters (used for pagination links and feeds). */
 export function filtersToParams(
   filters: Filters,
@@ -296,6 +362,13 @@ export function filtersToParams(
   for (const t of filters.types) p.append('type', t);
   for (const t of filters.topics) p.append('topic', TOPIC_SLUGS[t]);
   if (filters.cfp) p.set('cfp', 'open');
+  if (filters.near) {
+    p.set('near', filters.near.label);
+    p.set('at', formatAt(filters.near));
+    p.set('u', filters.near.unit);
+    p.set('within', String(filters.near.radius));
+    if (filters.near.includeOnline) p.set('online', 'include');
+  }
   if (filters.range === 'month') {
     if (filters.month) p.set('range', filters.month);
   } else if (filters.range !== 'upcoming') p.set('range', filters.range);
@@ -318,6 +391,11 @@ export function withoutCfp(filters: Filters): Filters {
   return rest;
 }
 
+/** "within 25 miles of Chatham, Kent" */
+export function withinWords(near: NearFilter): string {
+  return `within ${near.radius} ${near.unit === 'mi' ? 'miles' : 'km'} of ${near.label}`;
+}
+
 /** "about neurodiversity and cognitive or law and compliance" */
 export function aboutTopics(topics: readonly EventTopic[]): string {
   return `about ${topics.map((t) => TOPIC_LABELS[t].toLowerCase()).join(' or ')}`;
@@ -337,6 +415,7 @@ export function describeFilters(filters: Filters): string {
   parts.push(text);
   if (filters.access.length)
     parts.push(`with ${filters.access.map((a) => ACCESS_LABELS[a].toLowerCase()).join(' and ')}`);
+  if (filters.near) parts.push(withinWords(filters.near));
   if (filters.cfp) parts.push('with an open call for speakers');
   if (filters.q) parts.push(`matching “${filters.q}”`);
   const window =

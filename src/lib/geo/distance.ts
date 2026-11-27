@@ -13,6 +13,8 @@ export type Unit = 'mi' | 'km';
 export interface NearFilter extends Point {
   /** The radius, in km. */
   km: number;
+  /** The radius as chosen, in `unit` (10, 25, 50 or 100). */
+  radius: number;
   /** How distances are shown: from the place's country. */
   unit: Unit;
   /** The place's name, as shown ("Chatham, Kent"). */
