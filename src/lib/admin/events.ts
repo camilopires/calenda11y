@@ -139,9 +139,13 @@ export class NeedsTypeError extends Error {
   }
 }
 
-/** Whether this action would publish an event for the first time without a type (the database refuses too). */
+/**
+ * Whether this action would make an event public (published, or shown as
+ * cancelled) for the first time without a type. The database refuses too.
+ */
 export function blockedForType(e: Pick<AdminEvent, 'approved_at' | 'types'>, action: ModerationAction): boolean {
-  return TARGET[action] === 'approved' && !e.approved_at && e.types.length === 0;
+  const target = TARGET[action];
+  return (target === 'approved' || target === 'cancelled') && !e.approved_at && e.types.length === 0;
 }
 
 /** Saves edited details. Throws VersionConflict if the event changed since `version` was read. */

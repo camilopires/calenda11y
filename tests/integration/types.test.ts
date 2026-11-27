@@ -166,6 +166,13 @@ describe('moderate_event and types', () => {
     expect(row.data!.status).toBe('pending');
   });
 
+  it('a never-published event with no types cannot be made public as cancelled either', async () => {
+    const e = await inserted({ flags: ['needs_type'], status: 'pending' });
+    const r = await moderate(e.id, e.version, 'cancelled', `cancel-untyped-${e.id}`);
+    expect(r.error?.message).toBe('needs_type');
+    expect((await db.from('public_events').select('id').eq('id', e.id)).data).toEqual([]);
+  });
+
   it('a typed first publish works and clears needs_type', async () => {
     const e = await inserted({ flags: ['needs_type', 'possible_duplicate'], types: ['meetup'], status: 'pending' });
     const r = await moderate(e.id, e.version, 'approved', `typed-${e.id}`);

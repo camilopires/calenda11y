@@ -249,8 +249,9 @@ describe('month filter', () => {
   });
 
   it('wins over dates left in the form from before, which are dropped', () => {
-    const { filters, errors } = parse('range=2027-03&from=2027-01-01&to=2027-01-10');
+    const { filters, errors, values } = parse('range=2027-03&from=2027-01-01&to=2027-01-10');
     expect(errors).toEqual({});
+    expect(values).toMatchObject({ from: '', to: '' });
     expect(filters).toMatchObject({ range: 'month', month: '2027-03' });
     expect(filters.from).toBeUndefined();
     const p = filtersToParams(filters);

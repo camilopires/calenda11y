@@ -133,6 +133,14 @@ test.describe('event pages', () => {
     await page.getByRole('button', { name: 'Show events' }).click();
     await expect(page.locator('#results-count')).toContainText(`in ${later.label}`);
     await expect(page.locator('.error-summary')).toHaveCount(0);
+    // The old dates are gone, so going back to "Any upcoming date" really is any date.
+    await expect(page.getByLabel('From')).toHaveValue('');
+    await page.getByLabel('When').selectOption('upcoming');
+    await page.getByRole('button', { name: 'Show events' }).click();
+    await expect(page).toHaveURL(/[?&]range=upcoming/);
+    await expect(page).not.toHaveURL(/from=2030/);
+    await expect(page.locator('#results-count')).toHaveText(/^\d+ upcoming events(\. Page \d+ of \d+)?$/);
+    await expect(page.locator('.event').first()).toBeVisible();
     await context.close();
   });
 

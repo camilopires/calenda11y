@@ -118,6 +118,10 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
     else if (isIsoMonth(values.range)) {
       filters.range = 'month';
       filters.month = values.range;
+      // Dates left from an earlier search are dropped from the form too, so
+      // they can't come back later from inside the closed "More filters".
+      values.from = '';
+      values.to = '';
     } else errors.range = 'Choose when from the list';
   }
 

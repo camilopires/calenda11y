@@ -86,13 +86,32 @@ describe('types of imported events', () => {
     expect(by.untyped!.flags).toContain('needs_type');
   });
 
-  it('never proposes a type change when the source renames an event', async () => {
+  it('a rename at the source never changes or proposes types', async () => {
     const source = await makeSource();
     await runImport(source, later(), ctxFor([calendar(vevent('r', 'Accessibility Workshop', '20270412T100000Z'))]));
-    await runImport(source, later(), ctxFor([calendar(vevent('r', 'Accessibility Conference', '20270412T100000Z'))]));
-    const row = (await db.from('events').select('types,pending_changes').eq('source_id', source.id).single()).data!;
-    // Still pending, so the title changed directly; the type an admin may have set is left alone.
-    expect(row.types).toEqual(['workshop']);
+    const second = await runImport(
+      source,
+      later(),
+      ctxFor([calendar(vevent('r', 'Accessibility Conference', '20270412T100000Z'))]),
+    );
+    expect(second).toMatchObject({ ok: true, counts: { updated: 1 } });
+    const row = (await db.from('events').select('id,title,types').eq('source_id', source.id).single()).data!;
+    // Still pending, so the new title is applied straight away, but the types stay as they were.
+    expect(row).toMatchObject({ title: 'Accessibility Conference', types: ['workshop'] });
+
+    // Once published, the rename is proposed for review, without any type change.
+    await db.from('events').update({ status: 'approved' }).eq('id', row.id);
+    const third = await runImport(
+      source,
+      later(),
+      ctxFor([calendar(vevent('r', 'Accessibility Training', '20270412T100000Z'))]),
+    );
+    expect(third).toMatchObject({ ok: true, counts: { changed: 1 } });
+    const published = (await db.from('events').select('title,types,pending_changes').eq('id', row.id).single()).data!;
+    expect(published.title).toBe('Accessibility Conference');
+    expect(published.types).toEqual(['workshop']);
+    expect(published.pending_changes).toMatchObject({ title: 'Accessibility Training' });
+    expect(published.pending_changes).not.toHaveProperty('types');
   });
 });
 
