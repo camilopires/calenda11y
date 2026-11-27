@@ -1,0 +1,56 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import ErrorSummary from '../../../components/ErrorSummary.astro';
+import SourceForm from '../../../components/SourceForm.astro';
+import { requireAdmin } from '../../../lib/admin/auth';
+import { db } from '../../../lib/db';
+import { readSourceForm, validateSource, type SourceFormValues } from '../../../lib/imports/sourceForm';
+import { unwrap } from '../../../lib/result';
+
+const guard = await requireAdmin(Astro);
+if (!guard.ok) return guard.response;
+
+let values: SourceFormValues = {
+  name: '',
+  type: 'ics',
+  enabled: true,
+  url: '',
+  default_timezone: '',
+  default_country: '',
+  lang: 'en',
+  organisation_id: '',
+  token: '',
+  query: '',
+  refresh_token: '',
+};
+let errors: Record<string, string> = {};
+if (guard.form) {
+  values = readSourceForm(guard.form);
+  const r = validateSource(values);
+  if (!r.ok) errors = r.errors;
+  else {
+    unwrap(
+      await db()
+        .from('import_sources')
+        .insert({ name: r.name, type: r.type, enabled: r.enabled, config: r.config, created_by: guard.admin.userId })
+        .select('id'),
+      'supabase',
+      'adding source',
+    );
+    return Astro.redirect('/admin/sources?saved=1', 303);
+  }
+}
+---
+
+<AdminLayout
+  title="Add a source"
+  admin={guard.admin}
+  current="sources"
+  breadcrumbs={[{ href: '/admin/sources', label: 'Import sources' }]}
+>
+  <div class="page-head">
+    <h1>Add a source</h1>
+  </div>
+  <ErrorSummary errors={errors} targets={{ type: 'f-type' }} />
+  <SourceForm values={values} errors={errors} submitLabel="Add source" />
+</AdminLayout>

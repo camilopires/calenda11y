@@ -5,6 +5,7 @@ import EventFields from '../../../components/EventFields.astro';
 import Field from '../../../components/Field.astro';
 import { requireAdmin, takeDraft } from '../../../lib/admin/auth';
 import { VersionConflict, getAdminEvent, moderate, saveEvent, type ModerationAction } from '../../../lib/admin/events';
+import { acceptPendingChanges, discardPendingChanges } from '../../../lib/imports/upsert';
 import { describeWhen } from '../../../lib/events/dates';
 import { readEventForm, recordToForm, validateEvent, type EventFormValues } from '../../../lib/forms/event';
 import type { FieldErrors } from '../../../lib/forms/errors';
@@ -55,6 +56,13 @@ if (form) {
           return Astro.redirect(`/admin/events/${detail.event.id}?saved=1`, 303);
         }
       }
+    } else if (step === 'accept-changes' || step === 'discard-changes') {
+      const ok =
+        step === 'accept-changes'
+          ? await acceptPendingChanges(detail.event.id, sentVersion)
+          : await discardPendingChanges(detail.event.id, sentVersion);
+      if (!ok) throw new VersionConflict();
+      return Astro.redirect(`/admin/events/${detail.event.id}?saved=1`, 303);
     } else if (step === 'reject-check') {
       view = 'reject';
     } else if (step === 'reject') {
@@ -211,6 +219,50 @@ const STATUS: Record<string, string> = {
           </div>
         )}
       </section>
+
+      {e.pending_changes && Object.keys(e.pending_changes).length > 0 && (
+        <section aria-labelledby="changes" class="notice notice--important flow">
+          <h2 id="changes">The source changed this event</h2>
+          <p>The public page still shows the old details. Accept the changes to publish them.</p>
+          <div class="table-scroll">
+            <table class="data-table">
+              <caption class="visually-hidden">Changes from the source</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Detail</th>
+                  <th scope="col">Now</th>
+                  <th scope="col">Source says</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(e.pending_changes).map(([k, v]) => (
+                  <tr>
+                    <th scope="row">{k.replace(/_/g, ' ')}</th>
+                    <td>{String((e as unknown as Record<string, unknown>)[k] ?? 'Not set')}</td>
+                    <td>{String(v ?? 'Not set')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <form method="post" class="button-row">
+            <input type="hidden" name="version" value={version} />
+            <button type="submit" name="step" value="accept-changes">
+              Accept the changes
+            </button>
+            <button type="submit" name="step" value="discard-changes" class="button--secondary">
+              Keep the current details
+            </button>
+          </form>
+        </section>
+      )}
+      {e.flags.includes('cancel_requested') && e.status === 'approved' && (
+        <div class="notice notice--important flow-tight">
+          <p>
+            <strong>The source says this event is cancelled.</strong> Check, then choose "Mark as cancelled" below.
+          </p>
+        </div>
+      )}
 
       <section aria-labelledby="decide" class="flow">
         <h2 id="decide">Decide</h2>

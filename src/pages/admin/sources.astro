@@ -1,14 +1,109 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { requireAdmin } from '../../lib/admin/auth';
+import { describeCounts, getSource, listSources } from '../../lib/admin/sources';
+import { runTick } from '../../lib/jobs/queue';
+import '../../lib/jobs/handlers';
+import { SOURCE_TYPES } from '../../lib/imports/sourceForm';
 
 const guard = await requireAdmin(Astro);
 if (!guard.ok) return guard.response;
+
+let ranMessage: { ok: boolean; text: string } | null = null;
+if (guard.form && guard.form.get('step') === 'run') {
+  const id = String(guard.form.get('source') ?? '');
+  const source = await getSource(id);
+  if (source) {
+    const summary = await runTick({ onlyKey: `import:${source.id}`, budgetMs: 25_000 });
+    const r = summary.ran[0];
+    ranMessage = !r
+      ? { ok: false, text: `"${source.name}" is already running, or it's turned off. Try again in a few minutes.` }
+      : !r.ok
+        ? { ok: false, text: `"${source.name}" failed: ${r.error}` }
+        : r.finished
+          ? { ok: true, text: `"${source.name}" finished: ${describeCounts(r.counts as Record<string, number>)}.` }
+          : { ok: true, text: `"${source.name}" is still going. It will carry on in the next few minutes.` };
+  }
+}
+
+const sources = await listSources();
+const saved = Astro.url.searchParams.get('saved') === '1';
+const fmt = (iso: string | null) => (iso ? new Date(iso).toUTCString().replace(' GMT', ' UTC') : 'Never');
 ---
 
 <AdminLayout title="Import sources" admin={guard.admin} current="sources">
   <div class="page-head">
     <h1>Import sources</h1>
-    <p class="lede">Nothing here yet.</p>
+    <p class="lede">
+      Feeds we read every 6 hours. New events go to the review list; nothing is published without a person checking it.
+    </p>
+    <p>
+      <a class="button" href="/admin/sources/new">
+        Add a source
+      </a>
+    </p>
   </div>
+  {saved && (
+    <div class="notice notice--success" role="status" tabindex="-1" data-focus-on-load>
+      <p>Source saved.</p>
+    </div>
+  )}
+  {ranMessage && (
+    <div
+      class:list={['notice', ranMessage.ok ? 'notice--success' : 'notice--error']}
+      role="status"
+      tabindex="-1"
+      data-focus-on-load
+    >
+      <p>{ranMessage.text}</p>
+    </div>
+  )}
+  {sources.length === 0 ? (
+    <p>There are no sources yet.</p>
+  ) : (
+    <ul class="bare-list flow">
+      {sources.map((s) => (
+        <li class:list={['notice', 'flow-tight', { 'notice--error': s.last_error || s.credentials_status !== 'ok' }]}>
+          <h2 class="small">
+            <a href={`/admin/sources/${s.id}`}>{s.name}</a>
+          </h2>
+          <p>
+            {SOURCE_TYPES[s.type].label}. {s.enabled ? 'On' : 'Off'}.
+          </p>
+          <dl class="details-list small">
+            <dt>Last worked</dt>
+            <dd>{fmt(s.last_success_at)}</dd>
+            <dt>Last run</dt>
+            <dd>{describeCounts(s.last_counts)}</dd>
+            {s.credentials_status !== 'ok' && (
+              <>
+                <dt>Access</dt>
+                <dd>
+                  {s.credentials_status === 'missing'
+                    ? 'Needs credentials'
+                    : s.credentials_status === 'expired'
+                      ? 'Credentials refused or expired'
+                      : 'Unavailable'}
+                </dd>
+              </>
+            )}
+            {s.last_error && (
+              <>
+                <dt>Problem</dt>
+                <dd>{s.last_error}</dd>
+              </>
+            )}
+          </dl>
+          {s.enabled && (
+            <form method="post">
+              <input type="hidden" name="source" value={s.id} />
+              <button type="submit" name="step" value="run" class="button--secondary">
+                Run now<span class="visually-hidden">: {s.name}</span>
+              </button>
+            </form>
+          )}
+        </li>
+      ))}
+    </ul>
+  )}
 </AdminLayout>

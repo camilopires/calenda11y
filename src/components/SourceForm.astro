@@ -1,0 +1,123 @@
+---
+import Field from './Field.astro';
+import ChoiceGroup from './ChoiceGroup.astro';
+import type { FieldErrors } from '../lib/forms/errors';
+import { LANGUAGES, languageName } from '../lib/forms/event';
+import { SOURCE_TYPES, type SourceFormValues } from '../lib/imports/sourceForm';
+import { allCountries } from '../lib/events/countries';
+import { timeZones } from '../lib/events/tz';
+
+interface Props {
+  values: SourceFormValues;
+  errors: FieldErrors;
+  /** Whether secrets are already saved (their fields can be left blank). */
+  hasToken?: boolean;
+  hasRefreshToken?: boolean;
+  submitLabel: string;
+}
+const { values: v, errors: e, hasToken = false, hasRefreshToken = false, submitLabel } = Astro.props;
+const countries = await allCountries();
+---
+
+<form method="post" class="flow" novalidate>
+  <input type="hidden" name="step" value="save" />
+  <Field
+    name="name"
+    label="Name"
+    value={v.name}
+    error={e.name}
+    required
+    hint="What admins will see, like the group's name."
+    maxlength={200}
+  />
+  <ChoiceGroup
+    name="type"
+    legend="Kind of source"
+    type="radio"
+    required
+    value={v.type}
+    error={e.type}
+    options={Object.entries(SOURCE_TYPES).map(([value, t]) => ({ value, label: t.label, hint: t.hint }))}
+  />
+  <Field
+    name="url"
+    label="Feed address"
+    type="url"
+    value={v.url}
+    error={e.url}
+    hint="For iCalendar, RSS and Luma sources. Starts with https://"
+  />
+  <Field
+    name="default_timezone"
+    label="Time zone to use when the feed doesn't say"
+    type="select"
+    value={v.default_timezone}
+    error={e.default_timezone}
+    options={[{ value: '', label: 'UTC' }, ...timeZones().map((z) => ({ value: z, label: z.replace(/_/g, ' ') }))]}
+  />
+  <Field
+    name="default_country"
+    label="Country to use for in-person events when the feed doesn't say"
+    type="select"
+    value={v.default_country}
+    error={e.default_country}
+    hint="Without this, in-person events with no country are skipped."
+    options={[{ value: '', label: 'None' }, ...countries.map((c) => ({ value: c.code, label: c.name }))]}
+  />
+  <Field
+    name="lang"
+    label="Language of the events"
+    type="select"
+    value={v.lang}
+    error={e.lang}
+    required
+    options={LANGUAGES.map((l) => ({ value: l, label: languageName(l) }))}
+  />
+  <details
+    open={v.type === 'eventbrite' || v.type === 'meetup' || !!e.organisation_id || !!e.token || !!e.refresh_token}
+  >
+    <summary>Eventbrite and Meetup settings</summary>
+    <div class="flow">
+      <Field
+        name="organisation_id"
+        label="Eventbrite organisation id"
+        value={v.organisation_id}
+        error={e.organisation_id}
+        inputmode="numeric"
+      />
+      <Field
+        name="token"
+        label="Eventbrite token"
+        value=""
+        error={e.token}
+        hint={
+          hasToken
+            ? 'A token is saved. Leave this blank to keep it.'
+            : "A private token that can read the organisation's events."
+        }
+        autocomplete="off"
+      />
+      <Field name="query" label="Meetup search words" value={v.query} hint="For example: accessibility" />
+      <Field
+        name="refresh_token"
+        label="Meetup OAuth refresh token"
+        value=""
+        error={e.refresh_token}
+        hint={
+          hasRefreshToken ? 'A token is saved. Leave this blank to keep it.' : 'From connecting the Meetup account.'
+        }
+        autocomplete="off"
+      />
+    </div>
+  </details>
+  <div class="choice">
+    <input type="checkbox" id="f-enabled" name="enabled" checked={v.enabled} />
+    <label for="f-enabled">Import from this source every 6 hours</label>
+  </div>
+  <div class="button-row">
+    <button type="submit">{submitLabel}</button>
+    <a class="link-standalone" href="/admin/sources">
+      Go back without saving
+    </a>
+  </div>
+</form>

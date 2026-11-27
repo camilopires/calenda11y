@@ -22,7 +22,67 @@ export async function count(table: string, apply: (q: CountQuery) => CountQuery)
   return r.count ?? 0;
 }
 
+const HOUR = 3600_000;
+
 const checks: Check[] = [
+  async () => {
+    const n = await count('import_sources', (q) => q.eq('enabled', true).not('last_error', 'is', null));
+    return n
+      ? {
+          message: `${n} import ${n === 1 ? 'source' : 'sources'} failed the last time ${n === 1 ? 'it' : 'they'} ran.`,
+          href: '/admin/sources',
+          linkText: 'See import sources',
+        }
+      : null;
+  },
+  async () => {
+    const n = await count('import_sources', (q) => q.eq('enabled', true).neq('credentials_status', 'ok'));
+    return n
+      ? {
+          message: `${n} import ${n === 1 ? 'source needs' : 'sources need'} new or missing credentials.`,
+          href: '/admin/sources',
+          linkText: 'See import sources',
+        }
+      : null;
+  },
+  async () => {
+    // A source that hasn't worked for 13 hours (more than two 6-hour runs) points to a stuck scheduler or feed.
+    const cutoff = new Date(Date.now() - 13 * HOUR).toISOString();
+    const n = await count('import_sources', (q) =>
+      q.eq('enabled', true).lt('created_at', cutoff).or(`last_success_at.is.null,last_success_at.lt.${cutoff}`),
+    );
+    return n
+      ? {
+          message: `${n} import ${n === 1 ? 'source has' : 'sources have'} not worked for over 13 hours. The scheduler may not be running.`,
+          href: '/admin/jobs',
+          linkText: 'See scheduled jobs',
+        }
+      : null;
+  },
+  async () => {
+    const n = await count('jobs', (q) => q.not('last_error', 'is', null).neq('kind', 'import'));
+    return n
+      ? {
+          message: `${n} scheduled ${n === 1 ? 'job' : 'jobs'} failed.`,
+          href: '/admin/jobs',
+          linkText: 'See scheduled jobs',
+        }
+      : null;
+  },
+  async () => {
+    // The cleanup job runs daily; if it hasn't for two days, the scheduler is probably stopped.
+    const cutoff = new Date(Date.now() - 48 * HOUR).toISOString();
+    const n = await count('jobs', (q) =>
+      q.eq('key', 'cleanup').lt('created_at', cutoff).or(`last_success_at.is.null,last_success_at.lt.${cutoff}`),
+    );
+    return n
+      ? {
+          message: 'The daily clean-up has not run for 2 days. The scheduler may not be running.',
+          href: '/admin/jobs',
+          linkText: 'See scheduled jobs',
+        }
+      : null;
+  },
   async () => {
     const n = await count('email_outbox', (q) => q.in('status', ['failed', 'unknown']));
     return n

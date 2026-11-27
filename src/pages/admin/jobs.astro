@@ -1,14 +1,119 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { requireAdmin } from '../../lib/admin/auth';
+import { db } from '../../lib/db';
+import { unwrap } from '../../lib/result';
 
 const guard = await requireAdmin(Astro);
 if (!guard.ok) return guard.response;
+
+const jobs = unwrap(
+  await db()
+    .from('jobs')
+    .select('key,kind,interval_seconds,run_after,lease_until,last_success_at,last_error')
+    .order('key'),
+  'supabase',
+  'listing jobs',
+) as Array<{
+  key: string;
+  kind: string;
+  interval_seconds: number;
+  run_after: string;
+  lease_until: string | null;
+  last_success_at: string | null;
+  last_error: string | null;
+}>;
+const runs = unwrap(
+  await db()
+    .from('job_runs')
+    .select('id,job_key,started_at,finished_at,ok,finished_job,error')
+    .order('started_at', { ascending: false })
+    .limit(30),
+  'supabase',
+  'listing job runs',
+) as Array<{
+  id: number;
+  job_key: string;
+  started_at: string;
+  finished_at: string | null;
+  ok: boolean | null;
+  finished_job: boolean | null;
+  error: string | null;
+}>;
+const sourceNames = new Map(
+  (
+    unwrap(await db().from('import_sources').select('id,name'), 'supabase', 'listing sources') as Array<{
+      id: string;
+      name: string;
+    }>
+  ).map((s) => [`import:${s.id}`, s.name]),
+);
+const label = (key: string) =>
+  sourceNames.get(key)
+    ? `Import: ${sourceNames.get(key)}`
+    : key === 'outbox'
+      ? 'Send emails'
+      : key === 'cleanup'
+        ? 'Clean up old data'
+        : key;
+const fmt = (iso: string | null) => (iso ? new Date(iso).toUTCString().replace(' GMT', ' UTC') : 'Never');
+const every = (s: number) =>
+  s >= 86400 ? `${s / 86400} ${s === 86400 ? 'day' : 'days'}` : s >= 3600 ? `${s / 3600} hours` : `${s / 60} minutes`;
 ---
 
 <AdminLayout title="Scheduled jobs" admin={guard.admin} current="jobs">
   <div class="page-head">
     <h1>Scheduled jobs</h1>
-    <p class="lede">Nothing here yet.</p>
+    <p class="lede">Work that runs on its own. The scheduler checks for due jobs every 10 minutes.</p>
   </div>
+  {jobs.length === 0 ? (
+    <div class="notice notice--error">
+      <p>No jobs have run yet. Check that the scheduler is set up (see the README, "Scheduled jobs").</p>
+    </div>
+  ) : (
+    <div class="table-scroll">
+      <table class="data-table">
+        <caption class="visually-hidden">Scheduled jobs</caption>
+        <thead>
+          <tr>
+            <th scope="col">Job</th>
+            <th scope="col">Runs every</th>
+            <th scope="col">Last worked</th>
+            <th scope="col">Next run</th>
+            <th scope="col">Problem</th>
+          </tr>
+        </thead>
+        <tbody>
+          {jobs.map((j) => (
+            <tr>
+              <th scope="row">{label(j.key)}</th>
+              <td>{every(j.interval_seconds)}</td>
+              <td>{fmt(j.last_success_at)}</td>
+              <td>{j.lease_until && Date.parse(j.lease_until) > Date.now() ? 'Running now' : fmt(j.run_after)}</td>
+              <td>{j.last_error ?? 'None'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+  <h2>Recent runs</h2>
+  {runs.length === 0 ? (
+    <p>Nothing has run yet.</p>
+  ) : (
+    <ul>
+      {runs.map((r) => (
+        <li>
+          {fmt(r.started_at)}: {label(r.job_key)},{' '}
+          {r.finished_at === null
+            ? 'did not finish (it may have been stopped)'
+            : r.ok
+              ? r.finished_job
+                ? 'worked'
+                : 'worked, and will carry on'
+              : `failed: ${r.error}`}
+        </li>
+      ))}
+    </ul>
+  )}
 </AdminLayout>

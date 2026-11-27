@@ -1,0 +1,104 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import ErrorSummary from '../../../components/ErrorSummary.astro';
+import SourceForm from '../../../components/SourceForm.astro';
+import { requireAdmin, takeDraft } from '../../../lib/admin/auth';
+import { describeCounts, getSource, recentRuns } from '../../../lib/admin/sources';
+import { db } from '../../../lib/db';
+import { configToForm, readSourceForm, validateSource } from '../../../lib/imports/sourceForm';
+import { unwrap } from '../../../lib/result';
+
+const guard = await requireAdmin(Astro);
+if (!guard.ok) return guard.response;
+const source = await getSource(Astro.params.id ?? '');
+if (!source) return Astro.rewrite('/404');
+
+let values = configToForm(source.name, source.type, source.enabled, source.config);
+let errors: Record<string, string> = {};
+const form = guard.form ?? (Astro.request.method === 'GET' ? await takeDraft(Astro) : null);
+const restored = !guard.form && form !== null;
+if (form) {
+  values = readSourceForm(form);
+  if (!restored) {
+    const r = validateSource(values, source.config);
+    if (!r.ok) errors = r.errors;
+    else {
+      unwrap(
+        await db()
+          .from('import_sources')
+          .update({
+            name: r.name,
+            type: r.type,
+            enabled: r.enabled,
+            config: r.config,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', source.id)
+          .select('id'),
+        'supabase',
+        'saving source',
+      );
+      return Astro.redirect('/admin/sources?saved=1', 303);
+    }
+  }
+}
+const runs = await recentRuns(source.id);
+---
+
+<AdminLayout
+  title={source.name}
+  admin={guard.admin}
+  current="sources"
+  breadcrumbs={[{ href: '/admin/sources', label: 'Import sources' }]}
+>
+  <div class="page-head">
+    <h1>{source.name}</h1>
+  </div>
+  {restored && (
+    <div class="notice notice--important" role="status" tabindex="-1" data-focus-on-load>
+      <p>You were signed out while saving, so we kept your changes. Check them, then save.</p>
+    </div>
+  )}
+  <ErrorSummary errors={errors} targets={{ type: 'f-type' }} />
+  <SourceForm
+    values={values}
+    errors={errors}
+    hasToken={!!source.config.token}
+    hasRefreshToken={!!source.config.refresh_token}
+    submitLabel="Save source"
+  />
+
+  <section aria-labelledby="runs" class="flow">
+    <h2 id="runs">Recent runs</h2>
+    {runs.length === 0 ? (
+      <p>This source hasn't run yet.</p>
+    ) : (
+      <ul class="bare-list flow">
+        {runs.map((r) => (
+          <li class="notice flow-tight">
+            <p>
+              <strong>{new Date(r.started_at).toUTCString().replace(' GMT', ' UTC')}</strong>:{' '}
+              {r.status === 'complete' ? 'finished' : r.status === 'failed' ? 'failed' : 'still running'}.{' '}
+              {describeCounts(r.counts)}.
+            </p>
+            {r.error && <p>Problem: {r.error}</p>}
+            {r.skipped.length > 0 && (
+              <details>
+                <summary>
+                  {r.skipped.length} skipped {r.skipped.length === 1 ? 'item' : 'items'}
+                </summary>
+                <ul>
+                  {r.skipped.slice(0, 50).map((s) => (
+                    <li>
+                      {s.uid}: {s.reason}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+</AdminLayout>
