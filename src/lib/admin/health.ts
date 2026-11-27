@@ -3,6 +3,7 @@
  * unnoticed. Each check reports what's wrong and where to fix it.
  */
 import { db } from '../db.ts';
+import { currentPeriod } from '../digest/period.ts';
 import { ServiceError } from '../result.ts';
 
 export interface Problem {
@@ -13,7 +14,7 @@ export interface Problem {
 
 type Check = () => Promise<Problem | null>;
 
-type CountQuery = ReturnType<ReturnType<ReturnType<typeof db>['from']>['select']>;
+export type CountQuery = ReturnType<ReturnType<ReturnType<typeof db>['from']>['select']>;
 
 /** Counts rows in a table that match `apply`. Exported for checks added by other modules. */
 export async function count(table: string, apply: (q: CountQuery) => CountQuery): Promise<number> {
@@ -24,7 +25,31 @@ export async function count(table: string, apply: (q: CountQuery) => CountQuery)
 
 const HOUR = 3600_000;
 
+/** A digest that should have gone out more than 4 hours ago but hasn't finished. */
+function missedDigest(cadence: 'weekly' | 'monthly'): Check {
+  return async () => {
+    const p = currentPeriod(cadence, new Date());
+    if (Date.now() < p.sendAfter.getTime() + 4 * HOUR) return null;
+    const subscribers = await count('digest_subscribers', (q) =>
+      q.eq('cadence', cadence).not('confirmed_at', 'is', null).is('suppressed_at', null),
+    );
+    if (!subscribers) return null;
+    const done = await count('digest_runs', (q) =>
+      q.eq('cadence', cadence).eq('period_start', p.start).eq('status', 'complete'),
+    );
+    return done
+      ? null
+      : {
+          message: `This ${cadence === 'weekly' ? 'week' : 'month'}'s ${cadence} email has not been sent yet.`,
+          href: '/admin/subscribers',
+          linkText: 'See email digests',
+        };
+  };
+}
+
 const checks: Check[] = [
+  missedDigest('weekly'),
+  missedDigest('monthly'),
   async () => {
     const n = await count('import_sources', (q) => q.eq('enabled', true).not('last_error', 'is', null));
     return n

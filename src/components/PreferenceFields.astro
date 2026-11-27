@@ -1,0 +1,52 @@
+---
+import ChoiceGroup from './ChoiceGroup.astro';
+import Field from './Field.astro';
+import type { FieldErrors } from '../lib/forms/errors';
+import type { PreferenceValues } from '../lib/digest/form';
+import { FORMAT_LABELS, FORMATS } from '../lib/events/model';
+import { allCountries } from '../lib/events/countries';
+
+interface Props {
+  values: PreferenceValues;
+  errors: FieldErrors;
+}
+const { values: v, errors: e } = Astro.props;
+const countries = await allCountries();
+---
+
+<ChoiceGroup
+  name="cadence"
+  legend="How often?"
+  type="radio"
+  required
+  value={v.cadence}
+  error={e.cadence}
+  options={[
+    { value: 'weekly', label: 'Weekly', hint: "On Mondays, with that week's events." },
+    { value: 'monthly', label: 'Monthly', hint: "On the 1st, with that month's events." },
+  ]}
+/>
+<Field
+  name="country"
+  label="Country"
+  type="select"
+  value={v.country}
+  error={e.country}
+  hint="Leave as 'Everywhere' to get events from every country."
+  showOptional={false}
+  options={[{ value: '', label: 'Everywhere' }, ...countries.map((c) => ({ value: c.code, label: c.name }))]}
+/>
+<div class="choice">
+  <input type="checkbox" id="f-online" name="online" checked={v.online} />
+  <label for="f-online">Also include events I can join online</label>
+</div>
+<ChoiceGroup
+  name="format"
+  legend="Only these formats"
+  hint="Leave all unticked for every format."
+  type="checkbox"
+  inline
+  value={v.formats}
+  error={e.format}
+  options={FORMATS.map((f) => ({ value: f, label: FORMAT_LABELS[f] }))}
+/>

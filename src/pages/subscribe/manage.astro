@@ -1,0 +1,71 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ErrorSummary from '../../components/ErrorSummary.astro';
+import PreferenceFields from '../../components/PreferenceFields.astro';
+import { preferencesToValues, readPreferences, validatePreferences } from '../../lib/digest/form';
+import { subscriberToken } from '../../lib/digest/links';
+import { describePreferences, fromLink, updatePreferences } from '../../lib/digest/subscribers';
+
+const token = Astro.url.searchParams.get('token') ?? '';
+const sub = await fromLink('manage', token);
+let values = sub ? preferencesToValues(sub) : undefined;
+let errors: Record<string, string> = {};
+let saved = false;
+
+if (sub && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  values = readPreferences(form);
+  const r = validatePreferences(values);
+  if (!r.ok) errors = r.errors;
+  else {
+    await updatePreferences(sub, r.prefs);
+    Object.assign(sub, r.prefs);
+    saved = true;
+  }
+}
+const action = `/subscribe/manage?token=${encodeURIComponent(token)}`;
+---
+
+<BaseLayout title="Your emails" nav="subscribe" breadcrumbs={[{ href: '/subscribe', label: 'Subscribe' }]} noindex>
+  {!sub || !values ? (
+    <div class="notice notice--error flow-tight">
+      <h1>That link doesn't work</h1>
+      <p>It may be from an old email. Use the link in your most recent calenda11y email, or sign up again.</p>
+      <p>
+        <a href="/subscribe/email">Sign up for emails</a>
+      </p>
+    </div>
+  ) : (
+    <>
+      <div class="page-head">
+        <h1>Your emails</h1>
+        <p class="lede">
+          For {sub.email}. You get {describePreferences(sub)}.
+        </p>
+      </div>
+      {saved && (
+        <div class="notice notice--success" role="status" tabindex="-1" data-focus-on-load>
+          <p>Saved. You'll now get {describePreferences(sub)}. You can change this again at any time.</p>
+        </div>
+      )}
+      <ErrorSummary errors={errors} targets={{ cadence: 'f-cadence', format: 'f-format' }} />
+      <form method="post" action={action} class="flow" novalidate>
+        <PreferenceFields values={values} errors={errors} />
+        <div class="button-row">
+          <button type="submit">Save my choices</button>
+        </div>
+      </form>
+      <section aria-labelledby="stop" class="flow">
+        <h2 id="stop">Stop getting emails</h2>
+        <p>
+          <a
+            class="link-standalone"
+            href={`/subscribe/unsubscribe?token=${encodeURIComponent(subscriberToken('unsubscribe', sub.id, sub.token_version))}`}
+          >
+            Unsubscribe
+          </a>
+        </p>
+      </section>
+    </>
+  )}
+</BaseLayout>

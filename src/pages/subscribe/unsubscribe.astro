@@ -1,0 +1,30 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { fromLink } from '../../lib/digest/subscribers';
+
+const token = Astro.url.searchParams.get('token') ?? '';
+const sub = await fromLink('unsubscribe', token);
+---
+
+<BaseLayout title="Unsubscribe" nav="subscribe" breadcrumbs={[{ href: '/subscribe', label: 'Subscribe' }]} noindex>
+  {sub ? (
+    <div class="page-head flow">
+      <h1>Unsubscribe?</h1>
+      <p class="lede">You'll stop getting calenda11y emails at {sub.email}, and we'll delete the address.</p>
+      <form method="post" action={`/api/unsubscribe?token=${encodeURIComponent(token)}`} class="button-row">
+        <button type="submit">Unsubscribe</button>
+        <a class="link-standalone" href="/">
+          Keep getting emails
+        </a>
+      </form>
+    </div>
+  ) : (
+    <div class="notice flow-tight">
+      <h1>You're not subscribed</h1>
+      <p>
+        This address isn't on our list, so you won't get any more emails. If you think that's wrong, email
+        hello@calenda11y.org.
+      </p>
+    </div>
+  )}
+</BaseLayout>

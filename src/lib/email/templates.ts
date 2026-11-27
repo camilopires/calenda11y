@@ -70,3 +70,63 @@ export function reportForAdmins(
     { type: 'link', text: 'See open reports', href: url('/admin/reports') },
   ]);
 }
+
+// ---------------------------------------------------------------------------
+// Digest emails
+// ---------------------------------------------------------------------------
+
+export function confirmSubscription(confirmLink: string, description: string): EmailContent {
+  return renderEmail('Confirm your calenda11y emails', 'Confirm your emails', [
+    { type: 'p', text: `Someone, hopefully you, asked to get emails from calenda11y about ${description}.` },
+    { type: 'link', text: 'Confirm my emails', href: confirmLink },
+    {
+      type: 'p',
+      text: 'The link works for 7 days. If you did not ask for this, ignore this email and you will not hear from us again.',
+    },
+  ]);
+}
+
+export function manageSubscription(manageLink: string): EmailContent {
+  return renderEmail('Your calenda11y emails', 'You already get calenda11y emails', [
+    {
+      type: 'p',
+      text: 'Someone asked to sign this address up for calenda11y emails, but it is already signed up, so nothing has changed.',
+    },
+    { type: 'p', text: 'To change what you get, or to stop getting emails, use this link:' },
+    { type: 'link', text: 'Manage my emails', href: manageLink },
+    { type: 'p', text: 'If you did not ask for this, you can ignore this email.' },
+  ]);
+}
+
+export interface DigestItem {
+  title: string;
+  url: string;
+  when: string;
+  where: string;
+  summary: string;
+}
+
+export function digestEmail(
+  heading: string,
+  items: DigestItem[],
+  manageLink: string,
+  unsubscribeLink: string,
+): EmailContent {
+  return renderEmail(
+    heading,
+    heading,
+    [
+      { type: 'p', text: `${items.length} ${items.length === 1 ? 'event' : 'events'} for you.` },
+      {
+        type: 'list',
+        items: items.map((i) => ({ text: i.title, href: i.url, detail: `${i.when}. ${i.where}. ${i.summary}` })),
+      },
+      { type: 'link', text: 'See all events on calenda11y', href: url('/') },
+    ],
+    [
+      { type: 'p', text: 'You get this because you signed up for calenda11y emails.' },
+      { type: 'link', text: 'Change what you get', href: manageLink },
+      { type: 'link', text: 'Unsubscribe', href: unsubscribeLink },
+    ],
+  );
+}

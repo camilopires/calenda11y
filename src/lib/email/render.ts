@@ -67,12 +67,14 @@ export function renderEmail(subject: string, heading: string, blocks: Block[], f
 <title>${esc(subject)}</title>
 </head>
 <body style="margin:0;padding:0;background:${PAPER};color:${INK};font-family:'Atkinson Hyperlegible Next','Atkinson Hyperlegible',Verdana,Arial,sans-serif">
+<main>
 <div role="article" aria-roledescription="email" aria-label="${esc(subject)}" lang="en" style="max-width:600px;margin:0 auto;padding:24px 16px">
 <p style="margin:0 0 24px;font-size:20px;font-weight:bold;color:${INK}">calenda11y</p>
 <h1 style="margin:0 0 20px;font-size:26px;line-height:1.25;color:${INK}">${esc(heading)}</h1>
 ${blocks.map(blockHtml).join('\n')}
 ${footer.length ? `<hr style="border:0;border-top:2px solid ${MUTED};margin:32px 0 16px">\n${footer.map(blockHtml).join('\n')}` : ''}
 </div>
+</main>
 </body>
 </html>`;
   const text = [

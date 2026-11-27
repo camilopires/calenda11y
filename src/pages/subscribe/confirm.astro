@@ -1,0 +1,44 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { confirm, describePreferences, type Subscriber } from '../../lib/digest/subscribers';
+import { manageUrl } from '../../lib/digest/links';
+
+// Confirming needs a button press (POST): email security scanners open links
+// on their own, and that must not sign anyone up.
+const token = Astro.url.searchParams.get('token') ?? '';
+let result: Subscriber | null | undefined;
+if (Astro.request.method === 'POST') result = await confirm(token);
+---
+
+<BaseLayout
+  title="Confirm your emails"
+  nav="subscribe"
+  breadcrumbs={[{ href: '/subscribe', label: 'Subscribe' }]}
+  noindex
+>
+  {result === undefined ? (
+    <div class="page-head flow">
+      <h1>Confirm your emails</h1>
+      <p class="lede">One more step: confirm that you want emails from calenda11y.</p>
+      <form method="post" action={`/subscribe/confirm?token=${encodeURIComponent(token)}`}>
+        <button type="submit">Confirm my emails</button>
+      </form>
+    </div>
+  ) : result ? (
+    <div class="notice notice--success flow-tight" tabindex="-1" data-focus-on-load>
+      <h1>You're signed up</h1>
+      <p>You'll get {describePreferences(result)}.</p>
+      <p>
+        <a href={manageUrl(result.id, result.token_version)}>Change what you get</a>
+      </p>
+    </div>
+  ) : (
+    <div class="notice notice--error flow-tight" tabindex="-1" data-focus-on-load>
+      <h1>That link doesn't work</h1>
+      <p>It may have expired (links work for 7 days) or have been used already.</p>
+      <p>
+        <a href="/subscribe/email">Sign up again</a>
+      </p>
+    </div>
+  )}
+</BaseLayout>

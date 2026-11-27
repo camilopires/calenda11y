@@ -1,0 +1,13 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Unsubscribed" nav="subscribe" breadcrumbs={[{ href: '/subscribe', label: 'Subscribe' }]} noindex>
+  <div class="notice notice--success flow-tight" tabindex="-1" data-focus-on-load>
+    <h1>You're unsubscribed</h1>
+    <p>You won't get any more emails from calenda11y, and we've deleted your address.</p>
+    <p>
+      <a href="/subscribe/email">Sign up again</a>
+    </p>
+  </div>
+</BaseLayout>

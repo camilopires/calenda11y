@@ -1,0 +1,147 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CheckAnswers from '../../components/CheckAnswers.astro';
+import ErrorSummary from '../../components/ErrorSummary.astro';
+import Field from '../../components/Field.astro';
+import PreferenceFields from '../../components/PreferenceFields.astro';
+import {
+  readPreferences,
+  validatePreferences,
+  validateSignupEmail,
+  type PreferenceValues,
+} from '../../lib/digest/form';
+import { describePreferences, signUp, type Preferences } from '../../lib/digest/subscribers';
+import { signPayload, verifyPayload } from '../../lib/forms/signedPayload';
+import { db } from '../../lib/db';
+import { LIMITS, allow, clientIp } from '../../lib/security/ratelimit';
+import { unwrap } from '../../lib/result';
+
+const PURPOSE = 'digest-signup';
+interface Draft {
+  email: string;
+  prefs: Preferences;
+  values: PreferenceValues;
+}
+
+const q = Astro.url.searchParams;
+const initialCountry = (q.get('country') ?? '').toUpperCase();
+let values: PreferenceValues = {
+  cadence: 'weekly',
+  country: initialCountry === 'ONLINE' ? '' : initialCountry,
+  online: initialCountry === 'ONLINE',
+  formats: q.getAll('format'),
+};
+let email = '';
+let errors: Record<string, string> = {};
+const general: string[] = [];
+let view: 'form' | 'check' | 'done' = 'form';
+let payload = '';
+let checked: Draft | undefined;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const step = String(form.get('step') ?? 'check');
+  if (step === 'check') {
+    values = readPreferences(form);
+    email = String(form.get('email') ?? '').trim();
+    const p = validatePreferences(values);
+    errors = { ...validateSignupEmail(email), ...(p.ok ? {} : p.errors) };
+    if (!Object.keys(errors).length && p.ok) {
+      checked = { email, prefs: p.prefs, values };
+      payload = signPayload(PURPOSE, checked);
+      view = 'check';
+    }
+  } else {
+    const draft = verifyPayload<Draft>(PURPOSE, String(form.get('payload') ?? ''));
+    if (!draft) general.push('Something went wrong with your answers. Please fill in the form again.');
+    else if (step === 'edit') {
+      values = draft.data.values;
+      email = draft.data.email;
+    } else if (step === 'confirm') {
+      if (!(await allow(LIMITS.subscribePerIp, clientIp(Astro.request, Astro.clientAddress)))) {
+        values = draft.data.values;
+        email = draft.data.email;
+        general.push(
+          'There have been a lot of sign-ups from this connection in the last hour. Wait an hour and try again.',
+        );
+      } else {
+        // Single use: a second send of the same check page does nothing.
+        const nonce = await db()
+          .from('submission_nonces')
+          .insert({ nonce: draft.nonce, purpose: 'subscribe' })
+          .select('nonce');
+        if (!nonce.error) await signUp(draft.data.email, draft.data.prefs);
+        else if (nonce.error.code !== '23505') unwrap(nonce, 'supabase', 'saving nonce');
+        email = draft.data.email;
+        view = 'done';
+      }
+    }
+  }
+}
+---
+
+<BaseLayout
+  title={view === 'check' ? 'Check your email choices' : view === 'done' ? 'Check your email' : 'Get events by email'}
+  nav="subscribe"
+  breadcrumbs={[{ href: '/subscribe', label: 'Subscribe' }]}
+>
+  {view === 'done' ? (
+    <div class="notice notice--success flow-tight" tabindex="-1" data-focus-on-load>
+      <h1>Check your email</h1>
+      <p>We've sent a message to {email}. Open the link in it to confirm. The link works for 7 days.</p>
+      <p>If you're already signed up, the message has a link to change your choices instead.</p>
+    </div>
+  ) : view === 'check' && checked ? (
+    <>
+      <div class="page-head">
+        <h1 tabindex="-1" data-focus-on-load>
+          Check your email choices
+        </h1>
+      </div>
+      <form method="post" class="flow">
+        <input type="hidden" name="payload" value={payload} />
+        <CheckAnswers
+          action="/subscribe/email"
+          rows={[
+            { label: 'Email address', value: checked.email, field: 'f-email' },
+            { label: 'You will get', value: describePreferences(checked.prefs), field: 'f-cadence' },
+          ]}
+        />
+        <p>We'll send a link to confirm. You can unsubscribe at any time with one click.</p>
+        <div class="button-row">
+          <button type="submit" name="step" value="confirm">
+            Sign up
+          </button>
+        </div>
+      </form>
+    </>
+  ) : (
+    <>
+      <div class="page-head">
+        <h1>Get events by email</h1>
+        <p class="lede">A weekly or monthly email of upcoming accessibility events.</p>
+      </div>
+      <ErrorSummary errors={errors} general={general} targets={{ cadence: 'f-cadence', format: 'f-format' }} />
+      <form method="post" class="flow" novalidate>
+        <input type="hidden" name="step" value="check" />
+        <Field
+          name="email"
+          label="Email address"
+          type="email"
+          value={email}
+          error={errors.email}
+          required
+          autocomplete="email"
+          inputmode="email"
+        />
+        <PreferenceFields values={values} errors={errors} />
+        <div class="button-row">
+          <button type="submit">Continue</button>
+        </div>
+      </form>
+      <p class="small">
+        We only use your email address to send these emails. <a href="/privacy">Read how we handle it</a>.
+      </p>
+    </>
+  )}
+</BaseLayout>
