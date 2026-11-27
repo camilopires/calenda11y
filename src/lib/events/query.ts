@@ -2,7 +2,7 @@
 import { db } from '../db.ts';
 import { unwrap, unwrapMaybe } from '../result.ts';
 import { todayUtc } from './dates.ts';
-import { PUBLIC_EVENT_COLUMNS, type PublicEvent } from './model.ts';
+import { PUBLIC_EVENT_COLUMNS, type EventTopic, type PublicEvent } from './model.ts';
 import { applyFilters, type Filters } from './predicates.ts';
 
 export const PAGE_SIZE = 30;
@@ -93,4 +93,19 @@ export async function countryCounts(): Promise<CountryCount[]> {
     'supabase',
     'counting countries',
   ) as CountryCount[];
+}
+
+export interface TopicCount {
+  topic: EventTopic;
+  upcoming: number;
+}
+
+/** Upcoming events per topic (published and cancelled, as topic pages list them). */
+export async function topicCounts(): Promise<Map<EventTopic, number>> {
+  const rows = unwrap(
+    await db().from('public_topic_counts').select('topic,upcoming'),
+    'supabase',
+    'counting topics',
+  ) as TopicCount[];
+  return new Map(rows.map((r) => [r.topic, r.upcoming]));
 }

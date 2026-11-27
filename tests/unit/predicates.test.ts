@@ -55,7 +55,15 @@ describe('parseFilters', () => {
     const r = parse('');
     expect(r.errors).toEqual({});
     expect(r.active).toBe(false);
-    expect(r.filters).toEqual({ formats: [], types: [], range: 'upcoming', access: [], when: 'upcoming', page: 1 });
+    expect(r.filters).toEqual({
+      formats: [],
+      types: [],
+      topics: [],
+      range: 'upcoming',
+      access: [],
+      when: 'upcoming',
+      page: 1,
+    });
   });
 
   it('parses every filter', () => {
@@ -286,5 +294,39 @@ describe('open for speakers filter', () => {
     expect(p.active).toBe(true);
     expect(filtersToParams(p.filters).get('cfp')).toBe('open');
     expect(describeFilters(p.filters)).toBe('conferences with an open call for speakers');
+  });
+});
+
+describe('topic filter', () => {
+  it('reads URL names (and stored spellings), in list order, once each', () => {
+    const { filters, values, errors } = parse('topic=assistive_tech&topic=content&topic=assistive-technology');
+    expect(errors).toEqual({});
+    expect(filters.topics).toEqual(['content', 'assistive_tech']);
+    // The form shows URL names, so the boxes are ticked whichever spelling came in.
+    expect(values.topics).toEqual(['assistive-technology', 'content', 'assistive-technology']);
+  });
+
+  it('refuses unknown topics, keeping what was typed', () => {
+    const { errors, values } = parse('topic=cooking');
+    expect(errors.topic).toBe('Choose a topic from the list');
+    expect(values.topics).toEqual(['cooking']);
+  });
+
+  it('filters with an overlap, writes URL names, and counts as active', () => {
+    const p = parse('topic=assistive_tech');
+    const r = new Recorder();
+    applyFilters(r, p.filters, '2026-11-27T12:00:00Z', '2026-11-27');
+    expect(r.calls).toContainEqual(['overlaps', 'topics', ['assistive_tech']]);
+    expect(filtersToParams(p.filters).getAll('topic')).toEqual(['assistive-technology']);
+    expect(p.active).toBe(true);
+  });
+
+  it('is described in plain words', () => {
+    expect(describeFilters(parse('type=conference&topic=neurodiversity').filters)).toBe(
+      'conferences about neurodiversity and cognitive',
+    );
+    expect(describeFilters(parse('topic=law&topic=testing').filters)).toBe(
+      'events about testing and auditing or law and compliance',
+    );
   });
 });

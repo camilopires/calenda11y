@@ -1,0 +1,30 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { EVENT_TOPICS, TOPIC_LABELS, TOPIC_SLUGS } from '../../lib/events/model';
+import { topicCounts } from '../../lib/events/query';
+
+const counts = await topicCounts();
+---
+
+<BaseLayout
+  title="Topics"
+  description="Accessibility events by topic: inclusive design, neurodiversity, testing, law and more."
+  canonical="/topics"
+>
+  <div class="page-head">
+    <h1>Topics</h1>
+    <p class="lede">Pick a topic to see what's on.</p>
+  </div>
+  <ul class="flow-tight">
+    {EVENT_TOPICS.map((t) => {
+      const n = counts.get(t) ?? 0;
+      return (
+        <li>
+          <a href={`/topics/${TOPIC_SLUGS[t]}`}>{TOPIC_LABELS[t]}</a>
+          {/* Short words here keep the page easy to read (3.1.5); the topic names are long already. */}
+          {`: ${n === 0 ? 'none yet' : `${n} ${n === 1 ? 'event' : 'events'}`}`}
+        </li>
+      );
+    })}
+  </ul>
+</BaseLayout>

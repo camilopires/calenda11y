@@ -53,6 +53,9 @@ test.describe('target size', () => {
     '/privacy',
     '/accessibility',
     '/countries/PT',
+    '/topics',
+    '/topics/testing',
+    '/?topic=assistive-technology',
   ]) {
     test(`${path}: every target is at least 44 × 44`, async ({ page }) => {
       await page.goto(path);

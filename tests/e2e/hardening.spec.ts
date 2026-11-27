@@ -13,8 +13,18 @@ const SITE_COPY = [
   '/submit',
   '/settings',
   '/calendar',
+  '/topics',
 ];
-const KEY_PAGES = ['/', '/calendar', '/events/wcag-22-in-practice', '/submit', '/subscribe', '/sponsor'];
+const KEY_PAGES = [
+  '/',
+  '/calendar',
+  '/events/wcag-22-in-practice',
+  '/submit',
+  '/subscribe',
+  '/sponsor',
+  '/topics/testing',
+  '/?topic=assistive-technology',
+];
 
 test.describe('launch checks', () => {
   for (const path of SITE_COPY) {

@@ -1,0 +1,63 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import EventList from '../../components/EventList.astro';
+import Pagination from '../../components/Pagination.astro';
+import { TOPIC_LABELS, TOPIC_SLUGS, topicFromSlug } from '../../lib/events/model';
+import { parseFilters } from '../../lib/events/predicates';
+import { listEvents } from '../../lib/events/query';
+
+const topic = topicFromSlug(Astro.params.slug ?? '') ?? topicFromSlug((Astro.params.slug ?? '').toLowerCase());
+if (!topic) return Astro.rewrite('/404');
+const slug = TOPIC_SLUGS[topic];
+// Other spellings (assistive_tech, Testing) go to the one address.
+if (Astro.params.slug !== slug) return Astro.redirect(`/topics/${slug}`, 301);
+
+const params = new URLSearchParams({ topic: slug });
+const page = Astro.url.searchParams.get('page');
+if (page) params.set('page', page);
+const { filters, errors } = parseFilters(params);
+if (errors.page) return Astro.rewrite('/404');
+const result = await listEvents(filters);
+const label = TOPIC_LABELS[topic];
+---
+
+<BaseLayout
+  title={`Accessibility events: ${label}`}
+  description={`Upcoming accessibility events about ${label.toLowerCase()}.`}
+  canonical={`/topics/${slug}`}
+  breadcrumbs={[{ href: '/topics', label: 'Topics' }]}
+  crumbLabel={label}
+>
+  <div class="page-head">
+    <h1>Accessibility events: {label}</h1>
+    <p class="lede">
+      {result.total === 0
+        ? 'There are no upcoming events about this yet.'
+        : `${result.total} upcoming ${result.total === 1 ? 'event' : 'events'}.`}
+    </p>
+    <ul class="flow-tight">
+      <li>
+        <a class="link-standalone" href={`/?topic=${slug}`}>
+          Filter these events
+        </a>
+      </li>
+      <li>
+        <a class="link-standalone" href={`/subscribe?topic=${slug}`}>
+          Subscribe to these events
+        </a>
+      </li>
+    </ul>
+  </div>
+  {result.events.length > 0 ? (
+    <EventList events={result.events} />
+  ) : (
+    <p>
+      <a href="/submit">Add an event about {label.toLowerCase()}</a> or <a href="/topics">see other topics</a>.
+    </p>
+  )}
+  <Pagination
+    page={result.page}
+    pages={result.pages}
+    href={(n) => (n > 1 ? `/topics/${slug}?page=${n}` : `/topics/${slug}`)}
+  />
+</BaseLayout>

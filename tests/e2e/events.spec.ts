@@ -15,6 +15,11 @@ const PAGES = [
   '/events/tokyo-web-accessibility-night',
   '/countries/PT',
   '/countries/AQ',
+  '/topics',
+  '/topics/testing',
+  '/topics/careers',
+  '/?topic=assistive-technology',
+  '/?topic=nope',
   '/calendar',
   '/calendar?month=2026-13',
   '/calendar?country=online',
@@ -194,6 +199,65 @@ test.describe('event pages', () => {
       'The call for speakers closed on',
     );
     await expectNoAxeViolations(page, 'event with closed call');
+  });
+
+  test('filtering by topic works without JavaScript, from inside "More filters"', async ({ browser, baseURL }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false, baseURL: baseURL! });
+    const page = await context.newPage();
+    await page.goto('/');
+    await page.locator('details.filters__more summary').click();
+    await page.getByRole('checkbox', { name: 'Testing and auditing', exact: true }).check();
+    await page.getByRole('button', { name: 'Show events' }).click();
+    await expect(page).toHaveURL(/[?&]topic=testing/);
+    await expect(page.locator('details.filters__more')).toHaveAttribute('open', '');
+    await expect(page.locator('#results-count')).toContainText('about testing and auditing');
+    await expect(page.getByRole('link', { name: 'WCAG 2.2 in practice' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Berlin a11y Stammtisch' })).toHaveCount(0);
+    await context.close();
+  });
+
+  test('a link with the stored spelling ticks the right box, and the topic survives the next search', async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false, baseURL: baseURL! });
+    const page = await context.newPage();
+    await page.goto('/?topic=assistive_tech');
+    await expect(page.getByRole('checkbox', { name: 'Assistive technology', exact: true })).toBeChecked();
+    await page.getByLabel('Country').selectOption('online');
+    await page.getByRole('button', { name: 'Show events' }).click();
+    await expect(page).toHaveURL(/[?&]topic=assistive-technology/);
+    await expect(page.locator('#results-count')).toContainText('about assistive technology');
+    await context.close();
+  });
+
+  test('an unknown topic opens "More filters" and its error links to the topics', async ({ page }) => {
+    await page.goto('/?topic=nope');
+    await expect(page.locator('details.filters__more')).toHaveAttribute('open', '');
+    await page.locator('.error-summary').getByRole('link', { name: 'Choose a topic from the list' }).click();
+    await expect(page.getByRole('checkbox', { name: 'Inclusive design', exact: true })).toBeFocused();
+  });
+
+  test('topic pages list counts and events, with filter and subscribe links', async ({ page }) => {
+    await page.goto('/topics');
+    const testing = page
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('link', { name: 'Testing and auditing' }) });
+    await expect(testing).toContainText(/: \d+ events?$/);
+    await testing.getByRole('link').click();
+    await expect(page).toHaveURL(/\/topics\/testing$/);
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Accessibility events: Testing and auditing' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('navigation', { name: 'You are here' }).getByRole('link', { name: 'Topics' }),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'WCAG 2.2 in practice' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Filter these events' })).toHaveAttribute('href', '/?topic=testing');
+    expect((await page.request.get('/topics/nope')).status()).toBe(404);
+    const other = await page.request.get('/topics/assistive_tech', { maxRedirects: 0 });
+    expect(other.status()).toBe(301);
+    expect(other.headers().location).toBe('/topics/assistive-technology');
   });
 
   test('access provision filters need every chosen provision', async ({ page }) => {

@@ -5,9 +5,12 @@ import type { FieldErrors } from '../lib/forms/errors';
 import {
   ACCESS_LABELS,
   ACCESS_PROVISIONS,
+  EVENT_TOPICS,
   EVENT_TYPES,
   FORMAT_LABELS,
   FORMATS,
+  TOPIC_LABELS,
+  TOPIC_SLUGS,
   TYPE_LABELS,
   countryName,
 } from '../lib/events/model';
@@ -48,6 +51,8 @@ const countryValue = values.country.toLowerCase() === 'online' ? 'online' : sele
 // A chosen month ignores leftover dates, so they don't open "More filters" either.
 const monthChosen = isIsoMonth(values.range);
 const moreActive = [
+  values.topics.length,
+  errors.topic,
   values.access.length,
   !monthChosen && values.from,
   !monthChosen && values.to,
@@ -160,6 +165,15 @@ if (monthChosen && !months.some((m) => m.value === values.range)) {
         </div>
       </fieldset>
     )}
+    <ChoiceGroup
+      name="topic"
+      legend="Topic"
+      type="checkbox"
+      inline
+      value={values.topics}
+      error={errors.topic}
+      options={EVENT_TOPICS.map((t) => ({ value: TOPIC_SLUGS[t], label: TOPIC_LABELS[t] }))}
+    />
     <ChoiceGroup
       name="access"
       legend="Access provisions"

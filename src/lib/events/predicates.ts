@@ -8,13 +8,18 @@ import type { FieldErrors } from '../forms/errors.ts';
 import {
   ACCESS_LABELS,
   ACCESS_PROVISIONS,
+  EVENT_TOPICS,
   EVENT_TYPES,
   FORMAT_LABELS,
   FORMATS,
   PRICES,
+  TOPIC_LABELS,
+  TOPIC_SLUGS,
   TYPE_PLURALS,
   countryName,
+  topicFromSlug,
   type AccessProvision,
+  type EventTopic,
   type EventType,
   type Format,
   type Price,
@@ -36,6 +41,8 @@ export interface Filters {
   types: EventType[];
   /** Only events whose call for speakers is still open. */
   cfp?: true;
+  /** About any of these topics (empty: no topic filter). */
+  topics: EventTopic[];
   range: Range;
   /** YYYY-MM, only for range = month. */
   month?: string;
@@ -59,6 +66,8 @@ export interface FilterValues {
   country: string;
   formats: string[];
   types: string[];
+  /** URL names (assistive-technology), whichever spelling came in, so the right boxes are ticked. */
+  topics: string[];
   cfp: boolean;
   range: string;
   from: string;
@@ -91,6 +100,10 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
     country: (params.get('country') ?? '').trim(),
     formats: params.getAll('format'),
     types: params.getAll('type'),
+    topics: params.getAll('topic').map((t) => {
+      const topic = topicFromSlug(t);
+      return topic ? TOPIC_SLUGS[topic] : t;
+    }),
     cfp: params.get('cfp') === 'open',
     range: params.get('range') ?? '',
     from: params.get('from') ?? '',
@@ -99,7 +112,15 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
     access: params.getAll('access'),
     q: (params.get('q') ?? '').trim(),
   };
-  const filters: Filters = { formats: [], types: [], range: 'upcoming', access: [], when: 'upcoming', page: 1 };
+  const filters: Filters = {
+    formats: [],
+    types: [],
+    topics: [],
+    range: 'upcoming',
+    access: [],
+    when: 'upcoming',
+    page: 1,
+  };
 
   if (values.country) {
     const upper = values.country.toUpperCase();
@@ -118,6 +139,10 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
     errors.type = 'Choose a type from the list';
   }
   filters.types = EVENT_TYPES.filter((t) => values.types.includes(t));
+
+  const chosenTopics = params.getAll('topic').map(topicFromSlug);
+  if (chosenTopics.includes(null)) errors.topic = 'Choose a topic from the list';
+  filters.topics = EVENT_TOPICS.filter((t) => chosenTopics.includes(t));
 
   const cfp = params.get('cfp');
   if (cfp === 'open') filters.cfp = true;
@@ -189,8 +214,8 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
     else errors.page = 'That page number does not exist';
   }
 
-  const active = ['country', 'format', 'type', 'cfp', 'range', 'from', 'to', 'price', 'access', 'q'].some((k) =>
-    params.has(k),
+  const active = ['country', 'format', 'type', 'topic', 'cfp', 'range', 'from', 'to', 'price', 'access', 'q'].some(
+    (k) => params.has(k),
   );
   return { filters, values, errors, active };
 }
@@ -240,6 +265,7 @@ export function applyFilters<Q extends FilterableQuery>(query: Q, filters: Filte
   const formats = effectiveFormats(filters);
   if (formats) q = q.in('format', formats);
   if (filters.types.length) q = q.overlaps('types', filters.types);
+  if (filters.topics.length) q = q.overlaps('topics', filters.topics);
   // Cancelled events are public too, but their calls aren't open.
   if (filters.cfp) q = q.gt('cfp_closes_at', now).eq('status', 'approved');
 
@@ -268,6 +294,7 @@ export function filtersToParams(
   if (filters.country) p.set('country', filters.country);
   for (const f of filters.formats) p.append('format', f);
   for (const t of filters.types) p.append('type', t);
+  for (const t of filters.topics) p.append('topic', TOPIC_SLUGS[t]);
   if (filters.cfp) p.set('cfp', 'open');
   if (filters.range === 'month') {
     if (filters.month) p.set('range', filters.month);
@@ -291,6 +318,11 @@ export function withoutCfp(filters: Filters): Filters {
   return rest;
 }
 
+/** "about neurodiversity and cognitive or law and compliance" */
+export function aboutTopics(topics: readonly EventTopic[]): string {
+  return `about ${topics.map((t) => TOPIC_LABELS[t].toLowerCase()).join(' or ')}`;
+}
+
 /** A plain-language description of the filters, e.g. "online events with live captions". */
 export function describeFilters(filters: Filters): string {
   const parts: string[] = [];
@@ -298,6 +330,8 @@ export function describeFilters(filters: Filters): string {
   const kinds = filters.types.length ? filters.types.map((t) => TYPE_PLURALS[t]).join(' or ') : 'events';
   const subject = filters.price ? `${filters.price} ${kinds}` : kinds;
   let text = formats.length ? `${formats.join(' or ')} ${subject}` : subject;
+  // "conferences about law and compliance in Portugal", as the results line says it.
+  if (filters.topics.length) text = `${text} ${aboutTopics(filters.topics)}`;
   if (filters.country === ONLINE) text = `${text} you can join online`;
   else if (filters.country) text = `${text} in ${countryName(filters.country)}`;
   parts.push(text);

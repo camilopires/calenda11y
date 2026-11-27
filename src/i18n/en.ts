@@ -25,6 +25,7 @@ export const en = {
   'footer.accessibility': 'Accessibility statement',
   'footer.privacy': 'Privacy',
   'footer.glossary': 'Glossary',
+  'footer.topics': 'Topics',
   'footer.settings': 'Display settings',
   'footer.sponsors': 'Thanks to our sponsors',
   'footer.licence': 'Code under the MIT licence. Event data under CC BY 4.0.',
