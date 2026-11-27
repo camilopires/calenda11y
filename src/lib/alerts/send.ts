@@ -24,7 +24,7 @@ import { SEND_HOUR_UTC } from '../digest/period.ts';
 import { PREF_COLS, rowToPrefs, type Subscriber } from '../digest/subscribers.ts';
 import { appendNear } from '../digest/send.ts';
 import { asOfLastChange, mergeChanges, reasonLines, type ChangeRow } from './changes.ts';
-import { cannotJudgeYet, wantsChange } from './match.ts';
+import { judgeableUpTo, wantsChange } from './match.ts';
 
 export type AlertCadence = 'daily' | 'instant';
 
@@ -242,15 +242,7 @@ export async function runAlerts(
         batches.set(s.alert_cursor, batch);
       }
       // Someone with a place waits just before any event that can't be judged yet.
-      let upTo = round.snapshot_seq;
-      if (s.near) {
-        for (const [eventId, rows] of batch.byEvent) {
-          const current = batch.events.get(eventId);
-          if (current && cannotJudgeYet(current, asOfLastChange(current, rows))) {
-            upTo = Math.min(upTo, Math.min(...rows.map((r) => r.seq)) - 1);
-          }
-        }
-      }
+      const upTo = s.near ? judgeableUpTo(batch.byEvent, batch.events, round.snapshot_seq) : round.snapshot_seq;
       const rows = upTo === round.snapshot_seq ? batch.rows : batch.rows.filter((r) => r.seq <= upTo);
       const added: AlertItem[] = [];
       const updated: AlertItem[] = [];

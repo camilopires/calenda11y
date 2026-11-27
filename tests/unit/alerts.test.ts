@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mergeChanges, reasonLines, type ChangeRow } from '../../src/lib/alerts/changes.ts';
-import { matchesPrefs, wantsChange } from '../../src/lib/alerts/match.ts';
+import { judgeableUpTo, matchesPrefs, wantsChange } from '../../src/lib/alerts/match.ts';
 import { makeEvent } from '../support/factories.ts';
 
 const NOW = new Date('2026-11-27T12:00:00Z');
@@ -130,5 +130,58 @@ describe('matching', () => {
     ).toBe(false);
     const net = one([row('updated', ['cancelled'], 'approved'), row('updated', ['restored'], 'cancelled')]);
     expect(wantsChange(ev(), net, prefs(), NOW)).toBe(false);
+  });
+});
+
+describe('how far an alert for someone with a place can go', () => {
+  const at = (s: number, event_id: string, after: Record<string, unknown>, kind: 'new' | 'updated' = 'updated') =>
+    ({ seq: s, event_id, kind, what: [], before_status: 'approved', after }) as unknown as ChangeRow;
+  const LONDON = { city: 'London', country_code: 'GB', venue: null, format: 'in_person' as const };
+  const LISBON = { city: 'Lisbon', country_code: 'PT', venue: null, format: 'in_person' as const };
+
+  it('everything, when every event can be judged', () => {
+    const a = makeEvent({ id: 'a', ...LONDON, geo_status: 'found' });
+    const rows = new Map([['a', [at(1, 'a', LONDON, 'new')]]]);
+    expect(judgeableUpTo(rows, new Map([['a', a]]), 5)).toBe(5);
+  });
+
+  it('stops before an event still being placed', () => {
+    const a = makeEvent({ id: 'a', ...LONDON, geo_status: 'found' });
+    const b = makeEvent({ id: 'b', ...LONDON, geo_status: 'pending' });
+    const rows = new Map([
+      ['a', [at(1, 'a', LONDON, 'new')]],
+      ['b', [at(2, 'b', LONDON, 'new')]],
+    ]);
+    expect(
+      judgeableUpTo(
+        rows,
+        new Map([
+          ['a', a],
+          ['b', b],
+        ]),
+        5,
+      ),
+    ).toBe(1);
+  });
+
+  it("stopping early can't pair an event's old place with its new position", () => {
+    // A is published in London (1), B waits for a position (2), A moves to Lisbon and is placed there (3).
+    const a = makeEvent({ id: 'a', ...LISBON, lat: 38.72, lng: -9.14, geo_status: 'found' });
+    const b = makeEvent({ id: 'b', ...LONDON, geo_status: 'pending' });
+    const rows = new Map([
+      ['a', [at(1, 'a', LONDON, 'new'), at(3, 'a', LISBON)]],
+      ['b', [at(2, 'b', LONDON, 'new')]],
+    ]);
+    // Stopping at 1 would describe A in London with Lisbon's position, so it stops before A too.
+    expect(
+      judgeableUpTo(
+        rows,
+        new Map([
+          ['a', a],
+          ['b', b],
+        ]),
+        3,
+      ),
+    ).toBe(0);
   });
 });

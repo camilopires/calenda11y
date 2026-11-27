@@ -1,7 +1,7 @@
 /** Whether a change should reach a subscriber, by their choices. Mirrors the digest's conditions. */
 import type { Preferences } from '../digest/subscribers.ts';
 import type { PublicEvent } from '../events/model.ts';
-import { hasNetChange, type MergedChange } from './changes.ts';
+import { asOfLastChange, hasNetChange, type ChangeRow, type MergedChange } from './changes.ts';
 import { withinNear } from '../geo/distance.ts';
 
 export type AlertPrefs = Pick<Preferences, 'countries' | 'formats' | 'types' | 'topics' | 'include_cfp' | 'near'>;
@@ -49,4 +49,32 @@ export function cannotJudgeYet(current: PublicEvent, asOf: PublicEvent): boolean
     current.city !== asOf.city ||
     current.country_code !== asOf.country_code
   );
+}
+
+/**
+ * For someone with a place: the last change their alert can include. It
+ * stops just before the first change to any event that can't be judged yet.
+ * Stopping early can make another event's changes cut short too, so its
+ * place as of the cut no longer matches its current position; that event
+ * then stops it as well. Repeated until nothing moves.
+ */
+export function judgeableUpTo(
+  byEvent: ReadonlyMap<string, readonly ChangeRow[]>,
+  events: ReadonlyMap<string, PublicEvent>,
+  snapshot: number,
+): number {
+  let upTo = snapshot;
+  for (;;) {
+    let next = upTo;
+    for (const [eventId, rows] of byEvent) {
+      const current = events.get(eventId);
+      const included = rows.filter((r) => r.seq <= next);
+      if (!current || !included.length) continue;
+      if (cannotJudgeYet(current, asOfLastChange(current, included))) {
+        next = Math.min(next, Math.min(...included.map((r) => r.seq)) - 1);
+      }
+    }
+    if (next === upTo) return upTo;
+    upTo = next;
+  }
 }
