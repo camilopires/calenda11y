@@ -76,6 +76,33 @@ test.describe('email digest', () => {
     expect(gone).toEqual([]);
   });
 
+  test('types chosen on the list carry into the email sign-up, and changing something else keeps them', async ({
+    page,
+  }) => {
+    const email = `typed-${uniq()}@example.test`;
+    await page.goto('/?type=talk');
+    await page.getByRole('link', { name: 'Subscribe to these events' }).click();
+    await page.locator('a.button', { hasText: /email/i }).click();
+    await expect(page.getByRole('checkbox', { name: 'Talk or webinar', exact: true })).toBeChecked();
+    await page.getByLabel('Email address').fill(email);
+    await page.getByRole('radio', { name: /^Weekly/ }).check();
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.locator('.check-answers')).toContainText('a weekly email of talks and webinars');
+    await page.getByRole('button', { name: 'Sign up' }).click();
+
+    const confirmUrl = linkIn(sentEmails().find((m) => m.to === email)!.text, '/subscribe/confirm');
+    await page.goto(confirmUrl.pathname + confirmUrl.search);
+    await page.getByRole('button', { name: 'Confirm my emails' }).click();
+    const manage = new URL((await page.getByRole('link', { name: 'Change what you get' }).getAttribute('href'))!);
+    await page.goto(manage.pathname + manage.search);
+    await expect(page.getByRole('checkbox', { name: 'Talk or webinar', exact: true })).toBeChecked();
+    await page.getByRole('radio', { name: /^Monthly/ }).check();
+    await page.getByRole('button', { name: 'Save my choices' }).click();
+    await expect(page.getByText(/Saved. You'll now get a monthly email of talks and webinars/)).toBeVisible();
+    const { data } = await service().from('digest_subscribers').select('cadence,types').eq('email', email).single();
+    expect(data).toEqual({ cadence: 'monthly', types: ['talk'] });
+  });
+
   test('GET on the unsubscribe link only shows a confirmation page', async ({ page }) => {
     const email = `getter-${uniq()}@example.test`;
     const { data } = await service()

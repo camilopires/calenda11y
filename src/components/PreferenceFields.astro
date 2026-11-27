@@ -3,7 +3,7 @@ import ChoiceGroup from './ChoiceGroup.astro';
 import Field from './Field.astro';
 import type { FieldErrors } from '../lib/forms/errors';
 import type { PreferenceValues } from '../lib/digest/form';
-import { FORMAT_LABELS, FORMATS } from '../lib/events/model';
+import { EVENT_TYPES, FORMAT_LABELS, FORMATS, TYPE_LABELS } from '../lib/events/model';
 import { allCountries } from '../lib/events/countries';
 
 interface Props {
@@ -49,4 +49,14 @@ const countries = await allCountries();
   value={v.formats}
   error={e.format}
   options={FORMATS.map((f) => ({ value: f, label: FORMAT_LABELS[f] }))}
+/>
+<ChoiceGroup
+  name="type"
+  legend="Only these types of event"
+  hint="Leave all unticked to get every type."
+  type="checkbox"
+  inline
+  value={v.types}
+  error={e.type}
+  options={EVENT_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }))}
 />

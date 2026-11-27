@@ -11,7 +11,7 @@ import { db } from '../db.ts';
 import { env } from '../env.ts';
 import { queued, sendNow } from '../email/outbox.ts';
 import { confirmSubscription, manageSubscription } from '../email/templates.ts';
-import { countryName, FORMAT_LABELS, type Format } from '../events/model.ts';
+import { countryName, FORMAT_LABELS, TYPE_PLURALS, type EventType, type Format } from '../events/model.ts';
 import { ServiceError, unwrap, unwrapMaybe } from '../result.ts';
 import { LIMITS, allow } from '../security/ratelimit.ts';
 import { randomToken, sha256 } from '../security/tokens.ts';
@@ -22,6 +22,8 @@ export interface Preferences {
   cadence: Cadence;
   countries: string[];
   formats: Format[];
+  /** Any of these types; empty means every type. */
+  types: EventType[];
 }
 
 export interface Subscriber extends Preferences {
@@ -32,7 +34,7 @@ export interface Subscriber extends Preferences {
   token_version: number;
 }
 
-const COLS = 'id,email,cadence,countries,formats,confirmed_at,suppressed_at,token_version';
+const COLS = 'id,email,cadence,countries,formats,types,confirmed_at,suppressed_at,token_version';
 const CONFIRM_DAYS = 7;
 
 export function describePreferences(p: Preferences): string {
@@ -40,7 +42,8 @@ export function describePreferences(p: Preferences): string {
   const where = p.countries.length
     ? ` ${p.countries.map((c) => (c === 'online' ? 'you can join online' : `in ${countryName(c)}`)).join(', or ')}`
     : '';
-  return `${p.cadence === 'weekly' ? 'a weekly' : 'a monthly'} email of ${formats}events${where}`;
+  const kinds = p.types.length ? p.types.map((t) => TYPE_PLURALS[t]).join(' or ') : 'events';
+  return `${p.cadence === 'weekly' ? 'a weekly' : 'a monthly'} email of ${formats}${kinds}${where}`;
 }
 
 async function sendConfirmation(subscriberId: string, email: string, prefs: Preferences): Promise<void> {

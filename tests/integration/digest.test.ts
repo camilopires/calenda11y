@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { runDigest } from '../../src/lib/digest/send.ts';
+import { eventsFor, runDigest } from '../../src/lib/digest/send.ts';
 import { service } from './helpers.ts';
 
 const db = service();
@@ -170,5 +170,20 @@ describe('review regressions: digest', () => {
     const { data } = await db.from('digest_runs').select('status').eq('period_start', '2031-02-24').single();
     expect(data!.status).toBe('complete');
     await db.from('digest_runs').delete().eq('period_start', '2031-02-24');
+  });
+});
+
+describe('digest selection by type', () => {
+  it('only includes events with any of the chosen types', async () => {
+    const now = new Date();
+    const period = {
+      start: now.toISOString().slice(0, 10),
+      end: new Date(now.getTime() + 60 * 86_400_000).toISOString().slice(0, 10),
+    };
+    const { events } = await eventsFor({ countries: [], formats: [], types: ['conference'] }, period, now);
+    expect(events.length).toBeGreaterThan(0);
+    for (const e of events) expect(e.types).toContain('conference');
+    const all = await eventsFor({ countries: [], formats: [], types: [] }, period, now);
+    expect(all.total).toBeGreaterThan(events.length);
   });
 });

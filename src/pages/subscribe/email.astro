@@ -30,6 +30,7 @@ let values: PreferenceValues = {
   country: initialCountry === 'ONLINE' ? '' : initialCountry,
   online: initialCountry === 'ONLINE',
   formats: q.getAll('format'),
+  types: q.getAll('type'),
 };
 let email = '';
 let errors: Record<string, string> = {};
@@ -129,7 +130,11 @@ if (Astro.request.method === 'POST') {
         <h1>Get events by email</h1>
         <p class="lede">A weekly or monthly email of upcoming accessibility events.</p>
       </div>
-      <ErrorSummary errors={errors} general={general} targets={{ cadence: 'f-cadence', format: 'f-format' }} />
+      <ErrorSummary
+        errors={errors}
+        general={general}
+        targets={{ cadence: 'f-cadence', format: 'f-format', type: 'f-type' }}
+      />
       <form method="post" class="flow" novalidate>
         <input type="hidden" name="step" value="check" />
         <Field

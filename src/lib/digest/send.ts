@@ -35,7 +35,7 @@ export interface DigestSelection {
 
 /** Events in the period that a subscriber's choices match. */
 export async function eventsFor(
-  prefs: Pick<Subscriber, 'countries' | 'formats'>,
+  prefs: Pick<Subscriber, 'countries' | 'formats' | 'types'>,
   period: Pick<Period, 'start' | 'end'>,
   now: Date,
 ): Promise<DigestSelection> {
@@ -48,6 +48,7 @@ export async function eventsFor(
     .gte('local_end_date', period.start > today ? period.start : today)
     .lte('local_start_date', period.end);
   if (prefs.formats.length) q = q.in('format', prefs.formats);
+  if (prefs.types.length) q = q.overlaps('types', prefs.types);
   const countries = prefs.countries.filter((c) => c !== 'online');
   const online = prefs.countries.includes('online');
   if (countries.length && online) q = q.or(`country_code.in.(${countries.join(',')}),format.in.(online,hybrid)`);
@@ -60,7 +61,7 @@ export async function eventsFor(
 
 /** A link to the same events on the site, as close as the list's filters allow. */
 export function digestListUrl(
-  prefs: Pick<Subscriber, 'countries' | 'formats'>,
+  prefs: Pick<Subscriber, 'countries' | 'formats' | 'types'>,
   period: Pick<Period, 'start' | 'end'>,
   today: string,
 ): string {
@@ -71,6 +72,7 @@ export function digestListUrl(
   if (countries.length === 1 && !online) p.set('country', countries[0]!);
   else if (!countries.length && online) p.set('country', 'online');
   for (const f of prefs.formats) p.append('format', f);
+  for (const t of prefs.types) p.append('type', t);
   p.set('from', period.start > today ? period.start : today);
   p.set('to', period.end);
   return new URL(`/?${p}`, env().SITE_URL).href;
@@ -159,7 +161,7 @@ async function processRun(
   while (Date.now() < deadline) {
     let q = db()
       .from('digest_subscribers')
-      .select('id,email,cadence,countries,formats,confirmed_at,suppressed_at,token_version')
+      .select('id,email,cadence,countries,formats,types,confirmed_at,suppressed_at,token_version')
       .eq('cadence', cadence)
       .not('confirmed_at', 'is', null)
       .is('suppressed_at', null)
@@ -184,7 +186,7 @@ async function processRun(
     for (const s of subs) {
       // Check the time between subscribers, so a slow batch can't run past the budget.
       if (Date.now() >= deadline) break;
-      const key = JSON.stringify([s.countries.slice().sort(), s.formats.slice().sort()]);
+      const key = JSON.stringify([s.countries.slice().sort(), s.formats.slice().sort(), s.types.slice().sort()]);
       if (!cache.has(key)) cache.set(key, await eventsFor(s, period, now));
       const { events, total } = cache.get(key)!;
       last = s.id;
