@@ -1,5 +1,6 @@
 import { expect, expectNoAxeViolations, test } from '../a11y/fixtures.ts';
 import {
+  frontOfQueue,
   insertPendingEvent,
   clearOutbox,
   ensureAdmin,
@@ -20,6 +21,7 @@ async function submitEvent(page: Page, title: string): Promise<string> {
   await page.getByRole('button', { name: 'Send for review' }).click();
   await expect(page).toHaveURL(/\/submit\/done$/);
   const { data } = await service().from('events').select('id').eq('title', title).single();
+  await frontOfQueue(data!.id);
   return data!.id as string;
 }
 

@@ -117,5 +117,17 @@ export async function insertPendingEvent(title: string, fields: Record<string, u
     .select('id')
     .single();
   if (error) throw error;
+  await frontOfQueue(data!.id);
   return data!.id;
+}
+
+/**
+ * The review queue shows the oldest events first, 50 to a page, and earlier
+ * local runs leave events behind. Giving a test's event a creation time
+ * that is earlier than every earlier run's puts it on the first page.
+ */
+export async function frontOfQueue(id: string): Promise<void> {
+  const createdAt = new Date(Date.UTC(2000, 0, 1) - (Date.now() - Date.UTC(2026, 0, 1)));
+  const { error } = await service().from('events').update({ created_at: createdAt.toISOString() }).eq('id', id);
+  if (error) throw error;
 }
