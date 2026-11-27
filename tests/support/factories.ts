@@ -23,6 +23,7 @@ export function makeEvent(overrides: Partial<PublicEvent> = {}): PublicEvent {
     topics: [],
     lat: 38.7223,
     lng: -9.1393,
+    geo_status: 'found',
     country_code: 'PT',
     city: 'Lisbon',
     venue: 'Rua das Flores 12',

@@ -22,6 +22,13 @@ describe('digest preferences: types', () => {
       types: ['party'],
       topics: [],
       include_cfp: false,
+      near: '',
+      nearFrom: null,
+      nearAt: '',
+      nearUnit: 'km',
+      nearWithin: '',
+      nearOnline: false,
+      nearPick: '',
     });
     expect(!r.ok && r.errors.type).toBe('Choose types from the list');
   });
@@ -34,6 +41,7 @@ describe('digest preferences: types', () => {
       types: ['talk'],
       topics: [],
       include_cfp: false,
+      near: null,
     });
     expect(v.types).toEqual(['talk']);
   });
@@ -47,6 +55,7 @@ describe('digest preferences: types', () => {
         types: ['conference', 'workshop'],
         topics: [],
         include_cfp: false,
+        near: null,
       }),
     ).toBe('a weekly email of conferences or workshops in Portugal');
     expect(
@@ -57,13 +66,14 @@ describe('digest preferences: types', () => {
         types: ['talk'],
         topics: [],
         include_cfp: false,
+        near: null,
       }),
     ).toBe('a monthly email of online talks and webinars');
   });
 
   it('links to the same types on the site', () => {
     const url = digestListUrl(
-      { countries: [], formats: [], types: ['meetup'], topics: [] },
+      { countries: [], formats: [], types: ['meetup'], topics: [], near: null },
       { start: '2031-03-03', end: '2031-03-09' },
       '2031-03-03',
     );

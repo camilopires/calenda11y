@@ -9,6 +9,7 @@ const prefs = (over: Partial<Preferences> = {}): Preferences => ({
   types: [],
   topics: [],
   include_cfp: false,
+  near: null,
   ...over,
 });
 
@@ -30,7 +31,7 @@ describe('alert cadences', () => {
     expect(describePreferences(prefs({ cadence: 'daily', countries: ['PT'] }))).toBe(
       'a daily email of new and changed events in Portugal',
     );
-    expect(describePreferences(prefs({ cadence: 'instant', topics: ['law'], include_cfp: true }))).toBe(
+    expect(describePreferences(prefs({ cadence: 'instant', topics: ['law'], include_cfp: true, near: null }))).toBe(
       'an email as soon as events about law and compliance are added or changed, plus calls for speakers',
     );
   });

@@ -17,8 +17,12 @@ import { allCountries } from '../lib/events/countries';
 interface Props {
   values: PreferenceValues;
   errors: FieldErrors;
+  /** "Which Medway?" choices, when a typed place matched several. */
+  placeChoices?: Array<{ value: string; label: string }> | undefined;
 }
-const { values: v, errors: e } = Astro.props;
+const { values: v, errors: e, placeChoices } = Astro.props;
+const placed = !!v.near && !!v.nearAt && v.nearFrom === v.near;
+const unitWord = placed && v.nearUnit === 'km' ? 'km' : 'miles';
 const countries = await allCountries();
 ---
 
@@ -74,6 +78,46 @@ const countries = await allCountries();
   error={e.type}
   options={EVENT_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }))}
 />
+<Field
+  name="near"
+  label="Near"
+  value={v.near}
+  error={e.near}
+  maxlength={100}
+  hint="A town, city or postcode. Leave blank for anywhere."
+/>
+{placeChoices && (
+  <ChoiceGroup
+    name="near_pick"
+    legend={`Which ${v.near}?`}
+    hint="We found more than one place with that name."
+    type="radio"
+    required
+    error={e.near_pick}
+    options={placeChoices}
+  />
+)}
+{placed && (
+  <>
+    <input type="hidden" name="near_from" value={v.near} />
+    <input type="hidden" name="near_at" value={v.nearAt} />
+    <input type="hidden" name="near_u" value={v.nearUnit} />
+  </>
+)}
+<Field
+  name="near_within"
+  label="Within"
+  type="select"
+  value={v.nearWithin || '25'}
+  error={e.near_within}
+  hint="Used only if you choose a place."
+  showOptional={false}
+  options={[10, 25, 50, 100].map((r) => ({ value: String(r), label: `${r} ${unitWord}` }))}
+/>
+<div class="choice">
+  <input type="checkbox" id="f-near_online" name="near_online" checked={v.nearOnline} />
+  <label for="f-near_online">With a place, also include online events</label>
+</div>
 <ChoiceGroup
   name="topic"
   legend="Only these topics"

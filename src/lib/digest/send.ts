@@ -11,10 +11,13 @@ import { digestEmail, type CfpItem, type DigestItem } from '../email/templates.t
 import { cfpDeadline } from '../events/cfp.ts';
 import { addDays, describeWhen, formatLongDate, todayUtc } from '../events/dates.ts';
 import { PUBLIC_EVENT_COLUMNS, TOPIC_SLUGS, countryName, type PublicEvent } from '../events/model.ts';
+import { nearCondition } from '../events/predicates.ts';
+import { withinNear, type NearFilter } from '../geo/distance.ts';
+import { formatAt } from '../geo/place.ts';
 import { unwrap, unwrapMaybe } from '../result.ts';
 import { manageUrl, unsubscribeHeaders, unsubscribeUrl } from './links.ts';
 import { currentPeriod, describePeriod, isDue, type Cadence, type Period } from './period.ts';
-import type { Subscriber } from './subscribers.ts';
+import { PREF_COLS, rowToPrefs, type Subscriber, type SubscriberRow } from './subscribers.ts';
 
 const MAX_EVENTS_PER_EMAIL = 40;
 
@@ -34,7 +37,7 @@ export interface DigestSelection {
   total: number;
 }
 
-type Prefs = Pick<Subscriber, 'countries' | 'formats' | 'types' | 'topics'>;
+type Prefs = Pick<Subscriber, 'countries' | 'formats' | 'types' | 'topics' | 'near'>;
 
 interface PrefQuery<Q> {
   in(column: string, values: readonly unknown[]): Q;
@@ -53,8 +56,21 @@ function applyPrefs<Q extends PrefQuery<Q>>(query: Q, prefs: Prefs): Q {
   if (countries.length && online) q = q.or(`country_code.in.(${countries.join(',')}),format.in.(online,hybrid)`);
   else if (countries.length) q = q.in('country_code', countries);
   else if (online) q = q.in('format', ['online', 'hybrid']);
+  // Near a place: a box here; the exact distance is checked after reading.
+  if (prefs.near) q = q.or(nearCondition(prefs.near));
   return q;
 }
+
+/** Reads every row a query matches, 1,000 at a time (the API's limit), then keeps those really near. */
+async function allNear(build: (from: number) => PromiseLike<{ data: unknown; error: unknown }>, near: NearFilter) {
+  const out: PublicEvent[] = [];
+  for (let from = 0; ; from += READ_CHUNK) {
+    const rows = unwrap((await build(from)) as never, 'supabase', 'reading nearby events') as unknown as PublicEvent[];
+    out.push(...rows.filter((e) => withinNear(e, near)));
+    if (rows.length < READ_CHUNK) return out;
+  }
+}
+const READ_CHUNK = 1000;
 
 /** How many calls for speakers the "closing soon" section lists, at most. */
 const MAX_CALLS_PER_EMAIL = 20;
@@ -69,13 +85,25 @@ const CFP_LOOKAHEAD_DAYS = 31;
  */
 export async function cfpFor(prefs: Prefs, period: Pick<Period, 'start' | 'end'>, now: Date): Promise<PublicEvent[]> {
   const until = `${addDays(period.end, CFP_LOOKAHEAD_DAYS)}T00:00:00Z`;
-  const q = db()
-    .from('public_events')
-    .select(PUBLIC_EVENT_COLUMNS)
-    .eq('status', 'approved')
-    .gt('cfp_closes_at', now.toISOString())
-    .lt('cfp_closes_at', until);
-  const result = await applyPrefs(q, prefs).order('cfp_closes_at').order('id').limit(MAX_CALLS_PER_EMAIL);
+  const base = () =>
+    db()
+      .from('public_events')
+      .select(PUBLIC_EVENT_COLUMNS)
+      .eq('status', 'approved')
+      .gt('cfp_closes_at', now.toISOString())
+      .lt('cfp_closes_at', until);
+  if (prefs.near) {
+    const near = await allNear(
+      (from) =>
+        applyPrefs(base(), prefs)
+          .order('cfp_closes_at')
+          .order('id')
+          .range(from, from + READ_CHUNK - 1),
+      prefs.near,
+    );
+    return near.slice(0, MAX_CALLS_PER_EMAIL);
+  }
+  const result = await applyPrefs(base(), prefs).order('cfp_closes_at').order('id').limit(MAX_CALLS_PER_EMAIL);
   return unwrap(result, 'supabase', 'selecting calls for speakers') as unknown as PublicEvent[];
 }
 
@@ -96,14 +124,27 @@ export async function eventsFor(
   now: Date,
 ): Promise<DigestSelection> {
   const today = todayUtc(now);
-  const q = db()
-    .from('public_events')
-    .select(PUBLIC_EVENT_COLUMNS, { count: 'exact' })
-    .eq('status', 'approved')
-    .gt('end_instant', now.toISOString())
-    .gte('local_end_date', period.start > today ? period.start : today)
-    .lte('local_start_date', period.end);
-  const result = await applyPrefs(q, prefs).order('start_instant').order('id').limit(MAX_EVENTS_PER_EMAIL);
+  const base = (count: boolean) =>
+    db()
+      .from('public_events')
+      .select(PUBLIC_EVENT_COLUMNS, count ? { count: 'exact' } : undefined)
+      .eq('status', 'approved')
+      .gt('end_instant', now.toISOString())
+      .gte('local_end_date', period.start > today ? period.start : today)
+      .lte('local_start_date', period.end);
+  if (prefs.near) {
+    // Read the whole box, keep what's really near, then count and cut.
+    const near = await allNear(
+      (from) =>
+        applyPrefs(base(false), prefs)
+          .order('start_instant')
+          .order('id')
+          .range(from, from + READ_CHUNK - 1),
+      prefs.near,
+    );
+    return { events: near.slice(0, MAX_EVENTS_PER_EMAIL), total: near.length };
+  }
+  const result = await applyPrefs(base(true), prefs).order('start_instant').order('id').limit(MAX_EVENTS_PER_EMAIL);
   const events = unwrap(result, 'supabase', 'selecting digest events') as unknown as PublicEvent[];
   return { events, total: result.count ?? events.length };
 }
@@ -119,6 +160,7 @@ export function digestListUrl(prefs: Prefs, period: Pick<Period, 'start' | 'end'
   for (const f of prefs.formats) p.append('format', f);
   for (const t of prefs.types) p.append('type', t);
   for (const t of prefs.topics) p.append('topic', TOPIC_SLUGS[t]);
+  appendNear(p, prefs.near);
   p.set('from', period.start > today ? period.start : today);
   p.set('to', period.end);
   return new URL(`/?${p}`, env().SITE_URL).href;
@@ -212,14 +254,14 @@ async function processRun(
   while (Date.now() < deadline) {
     let q = db()
       .from('digest_subscribers')
-      .select('id,email,cadence,countries,formats,types,topics,include_cfp,confirmed_at,suppressed_at,token_version')
+      .select(`id,email,${PREF_COLS},confirmed_at,suppressed_at,token_version`)
       .eq('cadence', cadence)
       .not('confirmed_at', 'is', null)
       .is('suppressed_at', null)
       .order('id')
       .limit(CHECKPOINT);
     if (cursor) q = q.gt('id', cursor);
-    const subs = unwrap(await q, 'supabase', 'listing subscribers') as Subscriber[];
+    const subs = (unwrap(await q, 'supabase', 'listing subscribers') as unknown as SubscriberRow[]).map(rowToPrefs);
     if (!subs.length) {
       unwrap(
         await db()
@@ -242,6 +284,8 @@ async function processRun(
         s.formats.slice().sort(),
         s.types.slice().sort(),
         s.topics.slice().sort(),
+        // Different places mean different events.
+        s.near ? [s.near.lat, s.near.lng, s.near.km, s.near.includeOnline] : null,
       ]);
       if (!cache.has(key)) cache.set(key, await eventsFor(s, period, now));
       const { events, total } = cache.get(key)!;
@@ -286,4 +330,14 @@ async function processRun(
     }
   }
   return { finished: false, counts };
+}
+
+/** The place, as list filters (?near=&at=&u=&within=&online=include). */
+export function appendNear(p: URLSearchParams, near: NearFilter | null): void {
+  if (!near) return;
+  p.set('near', near.label);
+  p.set('at', formatAt(near));
+  p.set('u', near.unit);
+  p.set('within', String(near.radius));
+  if (near.includeOnline) p.set('online', 'include');
 }

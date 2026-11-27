@@ -4,14 +4,10 @@ import CheckAnswers from '../../components/CheckAnswers.astro';
 import ErrorSummary from '../../components/ErrorSummary.astro';
 import Field from '../../components/Field.astro';
 import PreferenceFields from '../../components/PreferenceFields.astro';
-import {
-  readPreferences,
-  validatePreferences,
-  validateSignupEmail,
-  type PreferenceValues,
-} from '../../lib/digest/form';
+import { readPreferences, validateSignupEmail, type PreferenceValues } from '../../lib/digest/form';
 import { describePreferences, signUp, type Preferences } from '../../lib/digest/subscribers';
 import { signPayload, verifyPayload } from '../../lib/forms/signedPayload';
+import { settlePlace } from '../../lib/digest/place';
 import { db } from '../../lib/db';
 import { TOPIC_SLUGS, topicFromSlug } from '../../lib/events/model';
 import { LIMITS, allow, clientIp } from '../../lib/security/ratelimit';
@@ -39,6 +35,14 @@ let values: PreferenceValues = {
   }),
   // Coming from an "Open for speakers" search ticks the calls-for-speakers box.
   include_cfp: q.get('cfp') === 'open',
+  // A place from a near-me search comes along (list names: near, at, u, within, online=include).
+  near: (q.get('near') ?? '').slice(0, 100),
+  nearFrom: q.get('at') ? (q.get('near') ?? '') : null,
+  nearAt: q.get('at') ?? '',
+  nearUnit: q.get('u') === 'mi' ? 'mi' : 'km',
+  nearWithin: q.get('within') ?? '',
+  nearOnline: q.get('online') === 'include',
+  nearPick: '',
 };
 let email = '';
 let errors: Record<string, string> = {};
@@ -46,17 +50,20 @@ const general: string[] = [];
 let view: 'form' | 'check' | 'done' = 'form';
 let payload = '';
 let checked: Draft | undefined;
+let placeChoices: Array<{ value: string; label: string }> | undefined;
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   const step = String(form.get('step') ?? 'check');
   if (step === 'check') {
-    values = readPreferences(form);
     email = String(form.get('email') ?? '').trim();
-    const p = validatePreferences(values);
-    errors = { ...validateSignupEmail(email), ...(p.ok ? {} : p.errors) };
-    if (!Object.keys(errors).length && p.ok) {
-      checked = { email, prefs: p.prefs, values };
+    // A typed place is looked up here (several matches ask which one, on this form).
+    const settled = await settlePlace(readPreferences(form), clientIp(Astro.request, Astro.clientAddress));
+    values = settled.values;
+    if (settled.kind === 'choose') placeChoices = settled.choices;
+    errors = { ...validateSignupEmail(email), ...(settled.kind === 'errors' ? settled.errors : {}) };
+    if (!Object.keys(errors).length && settled.kind === 'ok') {
+      checked = { email, prefs: settled.prefs, values };
       payload = signPayload(PURPOSE, checked);
       view = 'check';
     }
@@ -157,7 +164,7 @@ if (Astro.request.method === 'POST') {
           autocomplete="email"
           inputmode="email"
         />
-        <PreferenceFields values={values} errors={errors} />
+        <PreferenceFields values={values} errors={errors} placeChoices={placeChoices} />
         <div class="button-row">
           <button type="submit">Continue</button>
         </div>

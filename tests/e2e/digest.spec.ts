@@ -165,6 +165,53 @@ test.describe('email digest', () => {
     expect(data!.alert_cursor).not.toBeNull();
   });
 
+  test('a place carries from a near-me search into sign-up, and can be changed or removed on manage', async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false, baseURL: baseURL! });
+    const page = await context.newPage();
+    await ownIp(page);
+    const email = `near-${uniq()}@example.test`;
+    await page.goto('/subscribe/email?near=Chatham%2C%20Kent%2C%20United%20Kingdom&at=51.3807,0.5214&u=mi&within=25');
+    await expect(page.getByLabel('Near')).toHaveValue('Chatham, Kent, United Kingdom');
+    await page.getByLabel('Email address').fill(email);
+    await page.getByRole('radio', { name: /^Weekly/ }).check();
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.locator('.check-answers')).toContainText('within 25 miles of Chatham, Kent, United Kingdom');
+    await page.getByRole('button', { name: 'Sign up' }).click();
+    const confirmUrl = linkIn(sentEmails().find((m) => m.to === email)!.text, '/subscribe/confirm');
+    await page.goto(confirmUrl.pathname + confirmUrl.search);
+    await page.getByRole('button', { name: 'Confirm my emails' }).click();
+    const manage = new URL((await page.getByRole('link', { name: 'Change what you get' }).getAttribute('href'))!);
+    await page.goto(manage.pathname + manage.search);
+
+    // An ambiguous place asks which one, keeping the other choices.
+    await page.getByLabel('Near').fill('Medway');
+    await page.getByRole('radio', { name: /^Monthly/ }).check();
+    await page.getByRole('button', { name: 'Save my choices' }).click();
+    const which = page.getByRole('group', { name: /Which Medway\?/ });
+    await expect(which).toBeVisible();
+    await expect(page.getByRole('radio', { name: /^Monthly/ })).toBeChecked();
+    await which.getByRole('radio', { name: 'Medway, Kent, United Kingdom' }).check();
+    await page.getByRole('button', { name: 'Save my choices' }).click();
+    await expect(
+      page.getByText(/Saved. You'll now get a monthly email of events within 25 miles of Medway, Kent/),
+    ).toBeVisible();
+
+    // Removing the place.
+    await page.getByLabel('Near').fill('');
+    await page.getByRole('button', { name: 'Save my choices' }).click();
+    await expect(page.getByText(/Saved. You'll now get a monthly email of events\./)).toBeVisible();
+    const { data } = await service()
+      .from('digest_subscribers')
+      .select('near_lat,near_label')
+      .eq('email', email)
+      .single();
+    expect(data).toEqual({ near_lat: null, near_label: null });
+    await context.close();
+  });
+
   test('GET on the unsubscribe link only shows a confirmation page', async ({ page }) => {
     const email = `getter-${uniq()}@example.test`;
     const { data } = await service()

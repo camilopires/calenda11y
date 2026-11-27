@@ -48,8 +48,15 @@ describe('calls for speakers in the digest', () => {
     const r = validatePreferences(readPreferences(fd));
     expect(r.ok && r.prefs.include_cfp).toBe(true);
     expect(
-      preferencesToValues({ cadence: 'weekly', countries: [], formats: [], types: [], topics: [], include_cfp: true })
-        .include_cfp,
+      preferencesToValues({
+        cadence: 'weekly',
+        countries: [],
+        formats: [],
+        types: [],
+        topics: [],
+        include_cfp: true,
+        near: null,
+      }).include_cfp,
     ).toBe(true);
     expect(
       describePreferences({
@@ -59,6 +66,7 @@ describe('calls for speakers in the digest', () => {
         types: [],
         topics: [],
         include_cfp: true,
+        near: null,
       }),
     ).toBe('a weekly email of events in Portugal, plus calls for speakers');
   });

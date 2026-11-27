@@ -180,10 +180,14 @@ describe('digest selection by type', () => {
       start: now.toISOString().slice(0, 10),
       end: new Date(now.getTime() + 60 * 86_400_000).toISOString().slice(0, 10),
     };
-    const { events } = await eventsFor({ countries: [], formats: [], types: ['conference'], topics: [] }, period, now);
+    const { events } = await eventsFor(
+      { countries: [], formats: [], types: ['conference'], topics: [], near: null },
+      period,
+      now,
+    );
     expect(events.length).toBeGreaterThan(0);
     for (const e of events) expect(e.types).toContain('conference');
-    const all = await eventsFor({ countries: [], formats: [], types: [], topics: [] }, period, now);
+    const all = await eventsFor({ countries: [], formats: [], types: [], topics: [], near: null }, period, now);
     expect(all.total).toBeGreaterThan(events.length);
   });
 });

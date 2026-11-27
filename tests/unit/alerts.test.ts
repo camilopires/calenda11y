@@ -93,7 +93,15 @@ describe('reason wording', () => {
   });
 });
 
-const prefs = (over = {}) => ({ countries: [], formats: [], types: [], topics: [], include_cfp: false, ...over });
+const prefs = (over = {}) => ({
+  countries: [],
+  formats: [],
+  types: [],
+  topics: [],
+  include_cfp: false,
+  near: null,
+  ...over,
+});
 
 describe('matching', () => {
   it('follows country, online, format, type and topic choices', () => {

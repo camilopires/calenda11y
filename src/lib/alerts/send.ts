@@ -21,9 +21,10 @@ import { PUBLIC_EVENT_COLUMNS, TOPIC_SLUGS, countryName, type PublicEvent } from
 import { ServiceError, unwrap, unwrapMaybe } from '../result.ts';
 import { manageUrl, unsubscribeHeaders, unsubscribeUrl } from '../digest/links.ts';
 import { SEND_HOUR_UTC } from '../digest/period.ts';
-import type { Subscriber } from '../digest/subscribers.ts';
+import { PREF_COLS, rowToPrefs, type Subscriber } from '../digest/subscribers.ts';
+import { appendNear } from '../digest/send.ts';
 import { asOfLastChange, mergeChanges, reasonLines, type ChangeRow } from './changes.ts';
-import { wantsChange } from './match.ts';
+import { cannotJudgeYet, wantsChange } from './match.ts';
 
 export type AlertCadence = 'daily' | 'instant';
 
@@ -43,10 +44,10 @@ interface Round {
 
 type AlertSubscriber = Pick<
   Subscriber,
-  'id' | 'email' | 'countries' | 'formats' | 'types' | 'topics' | 'include_cfp' | 'token_version'
+  'id' | 'email' | 'countries' | 'formats' | 'types' | 'topics' | 'include_cfp' | 'near' | 'token_version'
 > & { alert_cursor: number; prefs_revision: number };
 
-const SUB_COLS = 'id,email,countries,formats,types,topics,include_cfp,token_version,alert_cursor,prefs_revision';
+const SUB_COLS = `id,email,${PREF_COLS},token_version,alert_cursor,prefs_revision`;
 
 /** Finds the round to work on, starting one if it's time. Null when there's nothing to do yet. */
 async function currentRound(cadence: AlertCadence, maxSeq: number, now: Date): Promise<Round | null> {
@@ -146,6 +147,7 @@ function listUrl(s: AlertSubscriber): string {
   for (const f of s.formats) p.append('format', f);
   for (const t of s.types) p.append('type', t);
   for (const t of s.topics) p.append('topic', TOPIC_SLUGS[t]);
+  appendNear(p, s.near);
   return new URL(p.size ? `/?${p}` : '/', env().SITE_URL).href;
 }
 
@@ -176,6 +178,8 @@ export async function runAlerts(
   const batches = new Map<number, Batch>();
   // Someone whose details changed while we worked is skipped until the next run, not retried forever.
   const refused = new Set<string>();
+  // People with a place whose alerts wait for a position; they're done for this round.
+  const held = new Set<string>();
   let handled = 0;
   let queuedCount = 0;
 
@@ -189,10 +193,10 @@ export async function runAlerts(
       .lt('alert_cursor', round.snapshot_seq)
       .order('alert_cursor')
       .order('id')
-      .limit(SUBSCRIBER_PAGE + refused.size);
-    const page = (unwrap(await q, 'supabase', 'listing alert subscribers') as AlertSubscriber[]).filter(
-      (s) => !refused.has(s.id),
-    );
+      .limit(SUBSCRIBER_PAGE + refused.size + held.size);
+    const page = (unwrap(await q, 'supabase', 'listing alert subscribers') as unknown as Array<Record<string, unknown>>)
+      .map((r) => rowToPrefs(r as never) as unknown as AlertSubscriber)
+      .filter((s) => !refused.has(s.id) && !held.has(s.id));
     if (!page.length && refused.size) {
       // Only people whose details changed while we worked are left: keep the
       // round open so the next run tries them again with their new details.
@@ -237,15 +241,35 @@ export async function runAlerts(
         batch = { rows, byEvent, events: await eventsById([...byEvent.keys()]) };
         batches.set(s.alert_cursor, batch);
       }
+      // Someone with a place waits just before any event that can't be judged yet.
+      let upTo = round.snapshot_seq;
+      if (s.near) {
+        for (const [eventId, rows] of batch.byEvent) {
+          const current = batch.events.get(eventId);
+          if (current && cannotJudgeYet(current, asOfLastChange(current, rows))) {
+            upTo = Math.min(upTo, Math.min(...rows.map((r) => r.seq)) - 1);
+          }
+        }
+      }
+      const rows = upTo === round.snapshot_seq ? batch.rows : batch.rows.filter((r) => r.seq <= upTo);
       const added: AlertItem[] = [];
       const updated: AlertItem[] = [];
-      for (const [eventId, m] of mergeChanges(batch.rows)) {
+      for (const [eventId, m] of mergeChanges(rows)) {
         const current = batch.events.get(eventId);
         // Not public any more: nothing to tell.
         if (!current) continue;
-        const e = asOfLastChange(current, batch.byEvent.get(eventId) ?? []);
+        const e = asOfLastChange(
+          current,
+          rows.filter((r) => r.event_id === eventId),
+        );
         if (!wantsChange(e, m, s, now)) continue;
         (m.isNew ? added : updated).push(itemFor(e, reasonLines(e, m)));
+      }
+      if (upTo < round.snapshot_seq) {
+        held.add(s.id);
+        counts.waiting_for_positions = (counts.waiting_for_positions ?? 0) + 1;
+        // Nothing earlier to send, and the cursor can't move: leave them for the next round.
+        if (upTo <= s.alert_cursor) continue;
       }
       const total = added.length + updated.length;
       const shownAdded = added.slice(0, MAX_ITEMS);
@@ -275,7 +299,7 @@ export async function runAlerts(
           p_cadence: cadence,
           p_revision: s.prefs_revision,
           p_from: s.alert_cursor,
-          p_to: round.snapshot_seq,
+          p_to: upTo,
           p_email: email,
         }),
         'supabase',

@@ -108,7 +108,11 @@ describe('topics in the digest', () => {
 
 describe('calls for speakers in the digest', () => {
   it('picks open calls closing in the period or the month after, by closing time', async () => {
-    const calls = await cfpFor({ countries: ['IS'], formats: [], types: ['conference'], topics: [] }, PERIOD, NOW);
+    const calls = await cfpFor(
+      { countries: ['IS'], formats: [], types: ['conference'], topics: [], near: null },
+      PERIOD,
+      NOW,
+    );
     // Honolulu's last day (5 June) is "yesterday" in UTC, but it's still open there.
     expect(calls.map((e) => e.slug)).toEqual([`${tag}-honolulu`, `${tag}-no-date`, `${tag}-soon`]);
   });

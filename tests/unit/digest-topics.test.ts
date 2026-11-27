@@ -10,6 +10,7 @@ const prefs = (over: Partial<Preferences> = {}): Preferences => ({
   types: [],
   topics: [],
   include_cfp: false,
+  near: null,
   ...over,
 });
 
@@ -36,7 +37,7 @@ describe('digest preferences: topics', () => {
   });
 
   it('is described in plain words', () => {
-    expect(describePreferences(prefs({ countries: ['PT'], topics: ['neurodiversity'] }))).toBe(
+    expect(describePreferences(prefs({ countries: ['PT'], topics: ['neurodiversity'], near: null }))).toBe(
       'a weekly email of events about neurodiversity and cognitive in Portugal',
     );
   });

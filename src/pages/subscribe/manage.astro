@@ -2,7 +2,9 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import ErrorSummary from '../../components/ErrorSummary.astro';
 import PreferenceFields from '../../components/PreferenceFields.astro';
-import { preferencesToValues, readPreferences, validatePreferences } from '../../lib/digest/form';
+import { preferencesToValues, readPreferences } from '../../lib/digest/form';
+import { settlePlace } from '../../lib/digest/place';
+import { clientIp } from '../../lib/security/ratelimit';
 import { subscriberToken } from '../../lib/digest/links';
 import { describePreferences, fromLink, updatePreferences } from '../../lib/digest/subscribers';
 
@@ -11,15 +13,19 @@ const sub = await fromLink('manage', token);
 let values = sub ? preferencesToValues(sub) : undefined;
 let errors: Record<string, string> = {};
 let saved = false;
+let placeChoices: Array<{ value: string; label: string }> | undefined;
 
 if (sub && Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
-  values = readPreferences(form);
-  const r = validatePreferences(values);
-  if (!r.ok) errors = r.errors;
+  // A typed place is looked up here (several matches ask which one, on this form).
+  const settled = await settlePlace(readPreferences(form), clientIp(Astro.request, Astro.clientAddress));
+  values = settled.values;
+  if (settled.kind === 'choose') placeChoices = settled.choices;
+  else if (settled.kind === 'errors') errors = settled.errors;
   else {
-    await updatePreferences(sub, r.prefs);
-    Object.assign(sub, r.prefs);
+    await updatePreferences(sub, settled.prefs);
+    Object.assign(sub, settled.prefs);
+    values = preferencesToValues(sub);
     saved = true;
   }
 }
@@ -59,7 +65,7 @@ const action = `/subscribe/manage?token=${encodeURIComponent(token)}`;
         targets={{ cadence: 'f-cadence', format: 'f-format', type: 'f-type', topic: 'f-topic' }}
       />
       <form method="post" action={action} class="flow" novalidate>
-        <PreferenceFields values={values} errors={errors} />
+        <PreferenceFields values={values} errors={errors} placeChoices={placeChoices} />
         <div class="button-row">
           <button type="submit">Save my choices</button>
         </div>

@@ -129,6 +129,8 @@ export interface PublicEvent {
   /** Map position, for "near me" (null for online events, or if it couldn't be found). */
   lat: number | null;
   lng: number | null;
+  /** Whether the position is found, still being looked up ("pending"), or not needed. */
+  geo_status: 'pending' | 'found' | 'not_found' | 'failed' | 'none';
   country_code: string | null;
   city: string | null;
   venue: string | null;
@@ -161,7 +163,7 @@ export const PUBLIC_EVENT_COLUMNS =
   'id,slug,title,summary,description,lang,all_day,starts_at,ends_at,start_date,end_date,timezone,' +
   'local_start_date,local_end_date,start_instant,end_instant,format,country_code,city,venue,url,organiser,price,' +
   'captions,sign_language,step_free,quiet_room,hearing_loop,remote_attendance,access_notes,status,sequence,' +
-  'approved_at,cancelled_at,updated_at,types,cfp_url,cfp_closes_on,cfp_closes_at,cfp_last_day,cfp_capped,topics,lat,lng';
+  'approved_at,cancelled_at,updated_at,types,cfp_url,cfp_closes_on,cfp_closes_at,cfp_last_day,cfp_capped,topics,lat,lng,geo_status';
 
 export function accessProvisions(e: Pick<PublicEvent, AccessProvision>): AccessProvision[] {
   return ACCESS_PROVISIONS.filter((p) => e[p]);

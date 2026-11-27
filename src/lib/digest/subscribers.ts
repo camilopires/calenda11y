@@ -19,7 +19,8 @@ import {
   type EventType,
   type Format,
 } from '../events/model.ts';
-import { aboutTopics } from '../events/predicates.ts';
+import { aboutTopics, withinWords } from '../events/predicates.ts';
+import type { NearFilter, Unit } from '../geo/distance.ts';
 import { ServiceError, unwrap, unwrapMaybe } from '../result.ts';
 import { LIMITS, allow } from '../security/ratelimit.ts';
 import { randomToken, sha256 } from '../security/tokens.ts';
@@ -38,7 +39,57 @@ export interface Preferences {
   topics: EventTopic[];
   /** Also send calls for speakers closing soon. */
   include_cfp: boolean;
+  /** Only events near this place (null: anywhere). */
+  near: NearFilter | null;
 }
+
+/** The place's columns (near_*), all set or all null. */
+export interface NearColumns {
+  near_lat: number | null;
+  near_lng: number | null;
+  near_label: string | null;
+  near_km: number | null;
+  near_unit: Unit | null;
+  near_online: boolean;
+}
+
+/** Preferences as database columns: the place is stored flat, and cleared explicitly. */
+export function prefsToRow(p: Preferences): Omit<Preferences, 'near'> & NearColumns {
+  const { near, ...rest } = p;
+  return {
+    ...rest,
+    near_lat: near?.lat ?? null,
+    near_lng: near?.lng ?? null,
+    near_label: near?.label ?? null,
+    near_km: near?.km ?? null,
+    near_unit: near?.unit ?? null,
+    near_online: near?.includeOnline ?? true,
+  };
+}
+
+/** A database row back into preferences (the place rebuilt from its columns). */
+export function rowToPrefs<T extends Omit<Preferences, 'near'> & Partial<NearColumns>>(
+  row: T,
+): Omit<T, keyof NearColumns> & { near: NearFilter | null } {
+  const { near_lat, near_lng, near_label, near_km, near_unit, near_online, ...rest } = row;
+  const near =
+    near_lat != null && near_lng != null && near_label && near_km != null && near_unit
+      ? {
+          lat: near_lat,
+          lng: near_lng,
+          label: near_label,
+          km: Number(near_km),
+          unit: near_unit,
+          radius: Math.round(near_unit === 'mi' ? Number(near_km) / 1.609344 : Number(near_km)),
+          includeOnline: near_online ?? true,
+        }
+      : null;
+  return { ...rest, near };
+}
+
+/** Every column a subscriber's preferences need. */
+export const PREF_COLS =
+  'cadence,countries,formats,types,topics,include_cfp,near_lat,near_lng,near_label,near_km,near_unit,near_online';
 
 export interface Subscriber extends Preferences {
   id: string;
@@ -48,7 +99,9 @@ export interface Subscriber extends Preferences {
   token_version: number;
 }
 
-const COLS = 'id,email,cadence,countries,formats,types,topics,include_cfp,confirmed_at,suppressed_at,token_version';
+const COLS = `id,email,${PREF_COLS},confirmed_at,suppressed_at,token_version`;
+/** A subscriber as stored: the place in flat columns. */
+export type SubscriberRow = Omit<Subscriber, 'near'> & NearColumns;
 const CONFIRM_DAYS = 7;
 
 export function describePreferences(p: Preferences): string {
@@ -60,9 +113,11 @@ export function describePreferences(p: Preferences): string {
     (p.types.length ? p.types.map((t) => TYPE_PLURALS[t]).join(' or ') : 'events') +
     (p.topics.length ? ` ${aboutTopics(p.topics)}` : '');
   const cfp = p.include_cfp ? ', plus calls for speakers' : '';
-  if (p.cadence === 'daily') return `a daily email of new and changed ${formats}${kinds}${where}${cfp}`;
-  if (p.cadence === 'instant') return `an email as soon as ${formats}${kinds}${where} are added or changed${cfp}`;
-  return `${p.cadence === 'weekly' ? 'a weekly' : 'a monthly'} email of ${formats}${kinds}${where}${cfp}`;
+  const nearWords = p.near ? ` ${withinWords(p.near)}` : '';
+  if (p.cadence === 'daily') return `a daily email of new and changed ${formats}${kinds}${where}${nearWords}${cfp}`;
+  if (p.cadence === 'instant')
+    return `an email as soon as ${formats}${kinds}${where}${nearWords} are added or changed${cfp}`;
+  return `${p.cadence === 'weekly' ? 'a weekly' : 'a monthly'} email of ${formats}${kinds}${where}${nearWords}${cfp}`;
 }
 
 async function sendConfirmation(subscriberId: string, email: string, prefs: Preferences): Promise<void> {
@@ -115,7 +170,7 @@ export async function signUp(email: string, prefs: Preferences): Promise<void> {
     await db().from('digest_subscribers').select(COLS).eq('email', email).maybeSingle(),
     'supabase',
     'finding subscriber',
-  ) as Subscriber | null;
+  ) as unknown as SubscriberRow | null;
 
   if (existing?.confirmed_at) {
     const key = `subscribe:manage:${existing.id}:${Date.now()}`;
@@ -133,12 +188,12 @@ export async function signUp(email: string, prefs: Preferences): Promise<void> {
   }
   if (existing) {
     // Not confirmed yet: send a fresh confirmation, keeping their original choices.
-    await sendConfirmation(existing.id, email, existing);
+    await sendConfirmation(existing.id, email, rowToPrefs(existing));
     return;
   }
   const created = await db()
     .from('digest_subscribers')
-    .insert({ email, ...prefs })
+    .insert({ email, ...prefsToRow(prefs) })
     .select('id')
     .single();
   if (created.error?.code === '23505') return signUp(email, prefs);
@@ -155,28 +210,30 @@ export async function confirm(token: string): Promise<Subscriber | null> {
     'confirming subscription',
   ) as string | null;
   if (!subject) return null;
-  return unwrapMaybe(
+  const row = unwrapMaybe(
     await db().from('digest_subscribers').select(COLS).eq('id', subject).maybeSingle(),
     'supabase',
     'reading subscriber',
-  ) as Subscriber | null;
+  ) as unknown as SubscriberRow | null;
+  return row ? rowToPrefs(row) : null;
 }
 
 /** Finds the subscriber a manage or unsubscribe link belongs to, if the link is still valid. */
 export async function fromLink(kind: LinkKind, token: string | null | undefined): Promise<Subscriber | null> {
   const t = readSubscriberToken(kind, token);
   if (!t) return null;
-  return unwrapMaybe(
+  const row = unwrapMaybe(
     await db().from('digest_subscribers').select(COLS).eq('id', t.id).eq('token_version', t.version).maybeSingle(),
     'supabase',
     'reading subscriber',
-  ) as Subscriber | null;
+  ) as unknown as SubscriberRow | null;
+  return row ? rowToPrefs(row) : null;
 }
 
 export async function updatePreferences(s: Subscriber, prefs: Preferences): Promise<void> {
   const r = await db()
     .from('digest_subscribers')
-    .update({ ...prefs, updated_at: new Date().toISOString() })
+    .update({ ...prefsToRow(prefs), updated_at: new Date().toISOString() })
     .eq('id', s.id)
     .eq('token_version', s.token_version)
     .select('id');
