@@ -260,6 +260,11 @@ test.describe('event pages', () => {
     expect(other.headers().location).toBe('/topics/assistive-technology');
   });
 
+  test('"More filters" counts the topics chosen', async ({ page }) => {
+    await page.goto('/?topic=testing&topic=law&access=captions');
+    await expect(page.locator('details.filters__more summary')).toHaveText(/More filters: 3 chosen/);
+  });
+
   test('access provision filters need every chosen provision', async ({ page }) => {
     await page.goto('/?access=sign_language&access=quiet_room');
     const titles = await page.locator('.event__title').allTextContents();

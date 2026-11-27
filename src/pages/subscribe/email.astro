@@ -13,6 +13,7 @@ import {
 import { describePreferences, signUp, type Preferences } from '../../lib/digest/subscribers';
 import { signPayload, verifyPayload } from '../../lib/forms/signedPayload';
 import { db } from '../../lib/db';
+import { TOPIC_SLUGS, topicFromSlug } from '../../lib/events/model';
 import { LIMITS, allow, clientIp } from '../../lib/security/ratelimit';
 import { unwrap } from '../../lib/result';
 
@@ -31,7 +32,11 @@ let values: PreferenceValues = {
   online: initialCountry === 'ONLINE',
   formats: q.getAll('format'),
   types: q.getAll('type'),
-  topics: q.getAll('topic'),
+  // The boxes use URL names; a link may use the stored spelling (assistive_tech).
+  topics: q.getAll('topic').map((t) => {
+    const topic = topicFromSlug(t);
+    return topic ? TOPIC_SLUGS[topic] : t;
+  }),
   // Coming from an "Open for speakers" search ticks the calls-for-speakers box.
   include_cfp: q.get('cfp') === 'open',
 };

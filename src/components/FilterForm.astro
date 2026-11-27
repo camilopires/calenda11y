@@ -13,6 +13,7 @@ import {
   TOPIC_SLUGS,
   TYPE_LABELS,
   countryName,
+  topicFromSlug,
 } from '../lib/events/model';
 import { formatMonthYear, isIsoMonth, monthOptions, todayUtc } from '../lib/events/dates';
 import type { CountryCount } from '../lib/events/query';
@@ -61,7 +62,13 @@ const moreActive = [
   errors.to,
   values.range === 'custom',
 ].some(Boolean);
-const moreCount = values.access.length + (!monthChosen && values.from ? 1 : 0) + (!monthChosen && values.to ? 1 : 0);
+// Topics count once each, whichever spelling the link used.
+const chosenTopics = new Set(values.topics.filter((t) => topicFromSlug(t)));
+const moreCount =
+  chosenTopics.size +
+  values.access.length +
+  (!monthChosen && values.from ? 1 : 0) +
+  (!monthChosen && values.to ? 1 : 0);
 
 // This month and the next 11 (or the previous 11 for past events). A month
 // from a shared link that isn't in the list is added, so the select shows it.

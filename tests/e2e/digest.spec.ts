@@ -116,6 +116,11 @@ test.describe('email digest', () => {
     await expectNoAxeViolations(page, 'sign-up check with calls');
   });
 
+  test('a sign-up link with the stored topic spelling still ticks the box', async ({ page }) => {
+    await page.goto('/subscribe/email?topic=assistive_tech');
+    await expect(page.getByRole('checkbox', { name: 'Assistive technology', exact: true })).toBeChecked();
+  });
+
   test('topics chosen on the list carry into the email sign-up', async ({ page }) => {
     await page.goto('/?topic=content');
     await page.getByRole('link', { name: 'Subscribe to these events' }).click();
