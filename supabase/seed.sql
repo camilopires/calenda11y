@@ -102,6 +102,22 @@ where e.slug = t.slug;
 
 update public.events set topics = '{web_development}' where slug like 'online-a11y-talk-%';
 
+-- Map positions (normally looked up from OpenStreetMap by a background job).
+insert into public.events (slug, title, summary, lang, starts_at, ends_at, timezone, format, country_code, city, venue, url, organiser, price, status, types, topics)
+values ('chatham-a11y-evening', 'Chatham accessibility evening', 'Talks about accessible public services in Kent.', 'en',
+  (current_date + 11)::timestamp + time '18:30', (current_date + 11)::timestamp + time '20:30', 'Europe/London',
+  'in_person', 'GB', 'Chatham', 'The Historic Dockyard', 'https://example.org/chatham', 'Kent A11y', 'free', 'approved',
+  '{meetup}', '{inclusive_design}');
+
+update public.events e set lat = p.lat, lng = p.lng, geo_status = 'found', geo_query = p.city
+from (values
+  ('Lisbon', 38.7223, -9.1393), ('Berlin', 52.52, 13.405), ('Manchester', 53.4808, -2.2426),
+  ('Toronto', 43.6532, -79.3832), ('Sydney', -33.8688, 151.2093), ('Tokyo', 35.6762, 139.6503),
+  ('Nairobi', -1.2921, 36.8219), ('São Paulo', -23.5505, -46.6333), ('Dublin', 53.3498, -6.2603),
+  ('Stockholm', 59.3293, 18.0686), ('Paris', 48.8566, 2.3522), ('Chatham', 51.3807, 0.5214)
+) as p(city, lat, lng)
+where e.city = p.city and e.format <> 'online';
+
 insert into public.events_private (event_id, submitter_email, submitter_name)
 select id, 'organiser+' || slug || '@example.org', 'Seed organiser'
 from public.events;
