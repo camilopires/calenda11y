@@ -138,4 +138,25 @@ test.describe('calendar integrations', () => {
     }
     expect((await request.get('/feeds/all.ics')).headers()['cache-control']).toMatch(/public/);
   });
+  test("feeds can be filtered by type, and carry each event's types", async ({ request }) => {
+    const res = await request.get('/feeds/events.ics?type=conference');
+    expect(res.status()).toBe(200);
+    const events = parseIcs(await res.text());
+    expect(events.length).toBeGreaterThan(0);
+    for (const e of events) {
+      expect(e.component.getFirstProperty('categories')!.getValues()).toContain('Conference');
+    }
+    const rss = await (await request.get('/feeds/events.rss?type=conference')).text();
+    expect(rss).toContain('<category>Conference</category>');
+    expect(rss).not.toContain('Online accessibility talk');
+  });
+
+  test('event cards and pages show the types', async ({ page }) => {
+    await page.goto('/?type=conference');
+    const card = page.locator('.event', { hasText: 'Nordic Accessibility Summit' });
+    await expect(card.locator('.badge').first()).toHaveText('Conference');
+    await card.getByRole('link', { name: 'Nordic Accessibility Summit' }).click();
+    const details = page.locator('dl.details-list');
+    await expect(details).toContainText('Conference, Workshop');
+  });
 });

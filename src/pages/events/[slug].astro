@@ -4,7 +4,14 @@ import EventTime from '../../components/EventTime.astro';
 import RichText from '../../components/RichText.astro';
 import AddToCalendar from '../../components/AddToCalendar.astro';
 import TimeZoneToggle from '../../components/TimeZoneToggle.astro';
-import { ACCESS_LABELS, FORMAT_LABELS, PRICE_LABELS, accessProvisions, countryName } from '../../lib/events/model';
+import {
+  ACCESS_LABELS,
+  FORMAT_LABELS,
+  PRICE_LABELS,
+  TYPE_LABELS,
+  accessProvisions,
+  countryName,
+} from '../../lib/events/model';
 import { getEventBySlug } from '../../lib/events/query';
 
 const event = await getEventBySlug(Astro.params.slug ?? '');
@@ -65,6 +72,12 @@ const country = event.country_code ? countryName(event.country_code) : null;
             </>
           )}
         </dd>
+        {event.types.length > 0 && (
+          <>
+            <dt>Type</dt>
+            <dd>{event.types.map((ty) => TYPE_LABELS[ty]).join(', ')}</dd>
+          </>
+        )}
         <dt>Format</dt>
         <dd>{FORMAT_LABELS[event.format]}</dd>
         <dt>Price</dt>

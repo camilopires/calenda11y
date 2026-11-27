@@ -5,6 +5,7 @@ import {
   ACCESS_LABELS,
   FORMAT_LABELS,
   PRICE_LABELS,
+  TYPE_LABELS,
   accessProvisions,
   countryName,
   type PublicEvent,
@@ -49,6 +50,9 @@ const cancelled = event.status === 'cancelled';
     <p lang={event.lang}>{event.summary}</p>
     <ul class="badges" aria-label="Details">
       {cancelled && <li class="badge badge--cancelled">Cancelled</li>}
+      {event.types.map((ty) => (
+        <li class="badge">{TYPE_LABELS[ty]}</li>
+      ))}
       <li class="badge">{FORMAT_LABELS[event.format]}</li>
       <li class="badge">{PRICE_LABELS[event.price]}</li>
       {provisions.map((p) => (

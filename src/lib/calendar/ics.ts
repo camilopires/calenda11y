@@ -11,7 +11,7 @@
  * - Lines end in CRLF and are folded at 75 octets without splitting a UTF-8
  *   character.
  */
-import { countryName, type PublicEvent } from '../events/model.ts';
+import { TYPE_LABELS, countryName, type PublicEvent } from '../events/model.ts';
 import { zoneCity } from '../events/dates.ts';
 
 export const UID_DOMAIN = 'calenda11y.org';
@@ -105,6 +105,8 @@ function vevent(e: PublicEvent, siteUrl: string): string[] {
     `DESCRIPTION:${escapeText(eventDescription(e, siteUrl))}`,
     `LOCATION:${escapeText(eventLocation(e))}`,
     `URL:${eventPageUrl(siteUrl, e.slug)}`,
+    // Each type is one value; the commas between them are list separators, not text.
+    ...(e.types.length ? [`CATEGORIES:${e.types.map((t) => escapeText(TYPE_LABELS[t])).join(',')}`] : []),
     `STATUS:${e.status === 'cancelled' ? 'CANCELLED' : 'CONFIRMED'}`,
     'TRANSP:TRANSPARENT',
     'END:VEVENT',

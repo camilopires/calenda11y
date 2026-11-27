@@ -89,3 +89,20 @@ describe('buildCalendar', () => {
     expect(utcStamp('2026-12-01T18:30:00.123Z')).toBe('20261201T183000Z');
   });
 });
+
+describe('event types in calendars', () => {
+  it('lists the types as CATEGORIES, which calendar apps read back', () => {
+    const text = buildCalendar([makeEvent({ types: ['conference', 'talk'] })], {
+      name: 'calenda11y',
+      siteUrl: 'https://calenda11y.org',
+    });
+    expect(text).toContain('CATEGORIES:Conference,Talk or webinar\r\n');
+    const ev = new ICAL.Component(ICAL.parse(text)).getFirstSubcomponent('vevent')!;
+    expect(ev.getFirstProperty('categories')!.getValues()).toEqual(['Conference', 'Talk or webinar']);
+  });
+
+  it('leaves CATEGORIES out for an event with no types', () => {
+    const text = buildCalendar([makeEvent({ types: [] })], { name: 'c', siteUrl: 'https://calenda11y.org' });
+    expect(text).not.toContain('CATEGORIES');
+  });
+});

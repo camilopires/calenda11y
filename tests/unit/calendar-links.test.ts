@@ -61,3 +61,16 @@ describe('buildRss', () => {
     expect(xml).toMatch(/^<\?xml version="1.0" encoding="UTF-8"\?>/);
   });
 });
+
+describe('event types in RSS', () => {
+  it('adds a category for each type', () => {
+    const xml = buildRss([makeEvent({ types: ['workshop', 'training'] })], {
+      title: 'calenda11y',
+      description: 'Events',
+      siteUrl: SITE,
+      selfUrl: `${SITE}/feeds/events.rss`,
+    });
+    expect(xml).toContain('<category>Workshop</category>');
+    expect(xml).toContain('<category>Training course</category>');
+  });
+});
