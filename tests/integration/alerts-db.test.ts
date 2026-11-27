@@ -241,7 +241,14 @@ describe('alert round cleanup', () => {
       .from('alert_rounds')
       .insert([
         { cadence: 'daily', round_date: '2001-01-01', snapshot_seq: 0, status: 'complete', started_at: old },
-        { cadence: 'daily', round_date: '2001-01-02', snapshot_seq: 0, status: 'complete' },
+        // Bulk inserts send null for missing columns, so both rows say when they started.
+        {
+          cadence: 'daily',
+          round_date: '2001-01-02',
+          snapshot_seq: 0,
+          status: 'complete',
+          started_at: new Date().toISOString(),
+        },
       ])
       .select('id,round_date');
     await db.rpc('run_cleanup_digest');
