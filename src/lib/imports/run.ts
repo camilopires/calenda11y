@@ -110,7 +110,8 @@ export async function runImport(
   try {
     const adapter = ADAPTERS[source.type];
     while (status === 'fetching' && Date.now() < deadline) {
-      const page = await adapter.fetchPage(source, cursor ?? undefined, ctx);
+      // Reading a feed stops at the import's own deadline (see parseIcs).
+      const page = await adapter.fetchPage(source, cursor ?? undefined, { ...ctx, deadline: ctx.deadline ?? deadline });
       if (page.configUpdate) {
         source.config = { ...source.config, ...page.configUpdate };
         unwrap(

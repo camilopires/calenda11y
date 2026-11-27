@@ -141,7 +141,15 @@ function rawFrom(
 const isSkipped = (x: RawEvent | Skipped): x is Skipped => 'reason' in x;
 
 /** Parses an iCalendar document into raw events. */
-export function parseIcs(body: string, source: ImportSource, now: Date): FetchPage {
+/** Checking the clock costs little, but not nothing: once per this many recurrence steps. */
+const DEADLINE_CHECK_EVERY = 500;
+
+/**
+ * Reads a feed. Stops early (and says so, with `truncated`, so nothing is
+ * marked missing) when it runs out of time, or a series or the whole feed
+ * takes too many recurrence steps.
+ */
+export function parseIcs(body: string, source: ImportSource, now: Date, deadline = Infinity): FetchPage {
   let root: InstanceType<typeof ICAL.Component>;
   try {
     root = new ICAL.Component(ICAL.parse(body));
@@ -184,7 +192,20 @@ export function parseIcs(body: string, source: ImportSource, now: Date): FetchPa
     return end >= earliestEnd;
   };
 
+  let feedSteps = 0;
+  const stopReading = (uid: string, reason: string) => {
+    skipped.push({ uid, reason });
+    truncated = true;
+  };
   for (const [uid, event] of masters) {
+    if (Date.now() > deadline) {
+      stopReading(uid, 'The feed took too long to read; the rest was not read');
+      break;
+    }
+    if (feedSteps >= IMPORT_LIMITS.maxRecurrenceStepsPerFeed) {
+      stopReading(uid, 'The feed repeats too much to read in full; the rest was not read');
+      break;
+    }
     if (items.length >= IMPORT_LIMITS.maxItemsPerRun) {
       skipped.push({
         uid,
@@ -211,7 +232,15 @@ export function parseIcs(body: string, source: ImportSource, now: Date): FetchPa
     let steps = 0;
     for (let next = iterator.next(); next; next = iterator.next()) {
       if (++steps > IMPORT_LIMITS.maxRecurrenceSteps) {
-        skipped.push({ uid, reason: 'It repeats too often to read in full; later occurrences were not read' });
+        stopReading(uid, 'It repeats too often to read in full; later occurrences were not read');
+        break;
+      }
+      if (++feedSteps > IMPORT_LIMITS.maxRecurrenceStepsPerFeed) {
+        stopReading(uid, 'The feed repeats too much to read in full; the rest was not read');
+        break;
+      }
+      if (steps % DEADLINE_CHECK_EVERY === 0 && Date.now() > deadline) {
+        stopReading(uid, 'The feed took too long to read; the rest was not read');
         break;
       }
       if (next.toJSDate().getTime() > horizon) break;
@@ -232,10 +261,10 @@ export function parseIcs(body: string, source: ImportSource, now: Date): FetchPa
       }
       if (!keep(r)) continue;
       if (++kept > IMPORT_LIMITS.maxOccurrencesPerSeries) {
-        skipped.push({
+        stopReading(
           uid,
-          reason: `It repeats more than ${IMPORT_LIMITS.maxOccurrencesPerSeries} times in the next year; later ones were not read`,
-        });
+          `It repeats more than ${IMPORT_LIMITS.maxOccurrencesPerSeries} times in the next year; later ones were not read`,
+        );
         break;
       }
       items.push(r);
@@ -255,6 +284,6 @@ export const icsAdapter: Adapter = {
     if (res.status !== 200) throw new Error(`The feed answered with HTTP ${res.status}`);
     if (!/BEGIN:VCALENDAR/i.test(res.body.slice(0, 2000)))
       throw new Error('The address did not return an iCalendar feed');
-    return parseIcs(res.body, source, ctx.now);
+    return parseIcs(res.body, source, ctx.now, ctx.deadline);
   },
 };

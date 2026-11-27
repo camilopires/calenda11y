@@ -340,6 +340,49 @@ describe('cancellations of events not yet published', () => {
 });
 
 describe('review regressions: imports', () => {
+  it('never marks events missing when a series in the feed hits its repeat limit', async () => {
+    const source = await makeSource();
+    await runImport(
+      source,
+      later(),
+      ctxFor([calendar(vevent('c1', 'Kept', '20270601T100000Z'), vevent('c2', 'Other', '20270602T100000Z'))]),
+    );
+    const c2 = (await eventsOf(source.id)).find((e) => e.source_uid === 'c2')!;
+    await db.from('events').update({ status: 'approved' }).eq('id', c2.id);
+    // The feed now has c1 and an old series that repeats every minute, but not c2.
+    const busy = [
+      'BEGIN:VEVENT',
+      'UID:busy',
+      'DTSTAMP:20270101T000000Z',
+      'DTSTART:20000101T000000Z',
+      'DTEND:20000101T000100Z',
+      'RRULE:FREQ=MINUTELY',
+      'SUMMARY:Busy',
+      'END:VEVENT',
+    ];
+    const r = await runImport(source, later(), ctxFor([calendar(vevent('c1', 'Kept', '20270601T100000Z'), busy)]));
+    expect(r.counts.missing_from_source ?? 0).toBe(0);
+    expect((await eventsOf(source.id)).find((e) => e.source_uid === 'c2')!.flags).not.toContain('missing_from_source');
+  });
+
+  it("hands the import's deadline to the feed reader", async () => {
+    const source = await makeSource();
+    const { ADAPTERS } = await import('../../src/lib/imports/adapters.ts');
+    const original = ADAPTERS.ics.fetchPage;
+    const seen: Array<number | undefined> = [];
+    ADAPTERS.ics.fetchPage = async (src, cursor, ctx) => {
+      seen.push(ctx.deadline);
+      return original(src, cursor, ctx);
+    };
+    const deadline = later();
+    try {
+      await runImport(source, deadline, ctxFor([calendar(vevent('d1', 'One', '20270601T100000Z'))]));
+    } finally {
+      ADAPTERS.ics.fetchPage = original;
+    }
+    expect(seen).toEqual([deadline]);
+  });
+
   it('never marks events missing after a run that was cut short', async () => {
     const source = await makeSource();
     await runImport(

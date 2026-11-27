@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseIcs } from '../../src/lib/imports/ics.ts';
 import { normalise } from '../../src/lib/imports/normalise.ts';
+import { IMPORT_LIMITS } from '../../src/lib/imports/types.ts';
 import type { ImportSource, RawEvent } from '../../src/lib/imports/types.ts';
 
 const fixture = (name: string) => readFileSync(new URL(`../fixtures/ics/${name}`, import.meta.url), 'utf8');
@@ -92,7 +93,8 @@ describe('recurring events', () => {
     expect(weekly.find((w) => w.starts_at === '2027-11-10T23:00:00.000Z')?.cancelled).toBe(true);
   });
 
-  it('caps endless series', () => {
+  it('caps endless series, and says the feed was not read in full', () => {
+    expect(page.truncated).toBe(true);
     const daily = page.items.filter((i) => i.source_uid.startsWith('daily-forever@'));
     expect(daily.length).toBeLessThanOrEqual(200);
     expect(page.skipped.some((s) => s.uid === 'daily-forever@example.org' && /more than 200/.test(s.reason))).toBe(
@@ -221,5 +223,60 @@ describe('review regressions', () => {
     const page = parseIcs(cal(...many), source, NOW);
     expect(page.items).toHaveLength(5000);
     expect(page.truncated).toBe(true);
+  });
+});
+
+describe('limits on reading a feed', () => {
+  const vcal = (...events: string[][]) =>
+    ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//test//EN', ...events.flat(), 'END:VCALENDAR'].join('\r\n');
+  // An old series that repeats every minute: lots of work, nothing to import.
+  const minutely = (uid: string) => [
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    'DTSTAMP:20270101T000000Z',
+    'DTSTART:20000101T000000Z',
+    'DTEND:20000101T000100Z',
+    'RRULE:FREQ=MINUTELY',
+    'SUMMARY:Busy',
+    'END:VEVENT',
+  ];
+  const single = (uid: string) => [
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    'DTSTAMP:20270101T000000Z',
+    'DTSTART:20270301T100000Z',
+    'DTEND:20270301T110000Z',
+    'SUMMARY:One',
+    'END:VEVENT',
+  ];
+
+  it('marks a feed truncated when one series hits its step limit', () => {
+    const page = parseIcs(vcal(minutely('busy@x')), source, NOW);
+    expect(page.truncated).toBe(true);
+    expect(page.skipped.some((s) => s.uid === 'busy@x')).toBe(true);
+  });
+
+  it('shares one step budget across the whole feed, and stays quick', () => {
+    const many = Array.from({ length: 20 }, (_, i) => minutely(`busy${i}@x`));
+    const started = Date.now();
+    const page = parseIcs(vcal(...many, single('after@x')), source, NOW);
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(page.truncated).toBe(true);
+    // The budget covers a couple of series; the rest, including the event after them, aren't read.
+    expect(IMPORT_LIMITS.maxRecurrenceStepsPerFeed / IMPORT_LIMITS.maxRecurrenceSteps).toBeLessThan(20);
+    expect(page.skipped.some((s) => /the rest was not read/.test(s.reason))).toBe(true);
+    expect(page.items.some((i) => i.source_uid === 'after@x')).toBe(false);
+  });
+
+  it('stops at the deadline, before reading anything', () => {
+    const page = parseIcs(vcal(single('a@x'), single('b@x')), source, NOW, Date.now() - 1);
+    expect(page.items).toEqual([]);
+    expect(page.truncated).toBe(true);
+  });
+
+  it('reads everything when there is time', () => {
+    const page = parseIcs(vcal(single('a@x'), single('b@x')), source, NOW, Date.now() + 60_000);
+    expect(page.items).toHaveLength(2);
+    expect(page.truncated).toBeUndefined();
   });
 });

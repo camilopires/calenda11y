@@ -94,6 +94,8 @@ export interface FetchPage {
 
 export interface AdapterContext {
   now: Date;
+  /** When the import's time is up (ms since 1970). Reading a feed stops there and says it was cut short. */
+  deadline?: number;
   /** Fetches text from a URL, safely (see fetch.ts). Injected so tests can use fixtures. */
   fetchText: (
     url: string,
@@ -125,6 +127,11 @@ export const IMPORT_LIMITS = {
   maxOccurrencesPerSeries: 200,
   /** Recurrence steps per series, including past occurrences (a daily series from 2000 is about 10,000). */
   maxRecurrenceSteps: 50_000,
+  /**
+   * Recurrence steps for the whole feed, shared by every series, so a feed of
+   * many old, fast-repeating series can't tie up the import (about 1 second).
+   */
+  maxRecurrenceStepsPerFeed: 100_000,
   horizonDays: 366,
   /** Only events that end after this many days ago are imported. */
   keepEndedDays: 1,
