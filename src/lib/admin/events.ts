@@ -37,7 +37,7 @@ const COLUMNS =
   'id,slug,title,summary,description,lang,organiser,url,all_day,starts_at,ends_at,start_date,end_date,timezone,' +
   'format,country_code,city,venue,price,captions,sign_language,step_free,quiet_room,hearing_loop,remote_attendance,' +
   'access_notes,status,flags,source,source_id,pending_changes,version,local_start_date,local_end_date,start_instant,' +
-  'end_instant,created_at,updated_at,approved_at,types,cfp_url,cfp_closes_on';
+  'end_instant,created_at,updated_at,approved_at,types,cfp_url,cfp_closes_on,topics';
 
 export const ADMIN_PAGE_SIZE = 50;
 

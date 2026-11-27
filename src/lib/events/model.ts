@@ -7,6 +7,54 @@ export type Format = (typeof FORMATS)[number];
 export const EVENT_TYPES = ['conference', 'meetup', 'workshop', 'talk', 'training', 'other'] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
+/** What an event is about. An event can have several; all are optional. */
+export const EVENT_TOPICS = [
+  'inclusive_design',
+  'neurodiversity',
+  'design_systems',
+  'web_development',
+  'mobile',
+  'content',
+  'testing',
+  'law',
+  'assistive_tech',
+  'careers',
+] as const;
+export type EventTopic = (typeof EVENT_TOPICS)[number];
+
+export const TOPIC_LABELS: Record<EventTopic, string> = {
+  inclusive_design: 'Inclusive design',
+  neurodiversity: 'Neurodiversity and cognitive',
+  design_systems: 'Design systems',
+  web_development: 'Web development',
+  mobile: 'Mobile apps',
+  content: 'Content and plain language',
+  testing: 'Testing and auditing',
+  law: 'Law and compliance',
+  assistive_tech: 'Assistive technology',
+  careers: 'Careers and leadership',
+};
+
+/** The name used in URLs (?topic=, /topics/...). */
+export const TOPIC_SLUGS: Record<EventTopic, string> = {
+  inclusive_design: 'inclusive-design',
+  neurodiversity: 'neurodiversity',
+  design_systems: 'design-systems',
+  web_development: 'web-development',
+  mobile: 'mobile',
+  content: 'content',
+  testing: 'testing',
+  law: 'law',
+  assistive_tech: 'assistive-technology',
+  careers: 'careers',
+};
+
+/** A topic from its URL name, or from its stored spelling; null for anything else. */
+export function topicFromSlug(slug: string): EventTopic | null {
+  for (const t of EVENT_TOPICS) if (TOPIC_SLUGS[t] === slug || t === slug) return t;
+  return null;
+}
+
 export const PRICES = ['free', 'paid'] as const;
 export type Price = (typeof PRICES)[number];
 
@@ -76,6 +124,8 @@ export interface PublicEvent {
   format: Format;
   /** Empty for events published before types existed. */
   types: EventType[];
+  /** Optional, so often empty. */
+  topics: EventTopic[];
   country_code: string | null;
   city: string | null;
   venue: string | null;
@@ -108,7 +158,7 @@ export const PUBLIC_EVENT_COLUMNS =
   'id,slug,title,summary,description,lang,all_day,starts_at,ends_at,start_date,end_date,timezone,' +
   'local_start_date,local_end_date,start_instant,end_instant,format,country_code,city,venue,url,organiser,price,' +
   'captions,sign_language,step_free,quiet_room,hearing_loop,remote_attendance,access_notes,status,sequence,' +
-  'approved_at,cancelled_at,updated_at,types,cfp_url,cfp_closes_on,cfp_closes_at,cfp_last_day,cfp_capped';
+  'approved_at,cancelled_at,updated_at,types,cfp_url,cfp_closes_on,cfp_closes_at,cfp_last_day,cfp_capped,topics';
 
 export function accessProvisions(e: Pick<PublicEvent, AccessProvision>): AccessProvision[] {
   return ACCESS_PROVISIONS.filter((p) => e[p]);

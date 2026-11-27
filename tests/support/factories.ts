@@ -20,6 +20,7 @@ export function makeEvent(overrides: Partial<PublicEvent> = {}): PublicEvent {
     end_instant: '2026-12-01T20:30:00.000Z',
     format: 'in_person',
     types: ['meetup'],
+    topics: [],
     country_code: 'PT',
     city: 'Lisbon',
     venue: 'Rua das Flores 12',

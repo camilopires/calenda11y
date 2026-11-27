@@ -86,6 +86,22 @@ where slug = 'nairobi-inclusive-tech-day';
 update public.events set cfp_url = 'https://example.org/wcag22/speak', cfp_closes_on = current_date - 3
 where slug = 'wcag-22-in-practice';
 
+-- Topics (optional; an event can have several).
+update public.events e set topics = t.topics::public.event_topic[]
+from (values
+  ('lisbon-inclusive-design-meetup', '{inclusive_design}'),
+  ('screen-reader-testing-basics', '{testing,assistive_tech}'),
+  ('accessible-pdfs-clinic', '{content}'),
+  ('cognitive-accessibility-panel', '{neurodiversity}'),
+  ('design-systems-and-a11y', '{design_systems,web_development}'),
+  ('wcag-22-in-practice', '{testing,law}'),
+  ('multi-day-a11y-summit', '{inclusive_design,careers}'),
+  ('nairobi-inclusive-tech-day', '{inclusive_design,assistive_tech}')
+) as t(slug, topics)
+where e.slug = t.slug;
+
+update public.events set topics = '{web_development}' where slug like 'online-a11y-talk-%';
+
 insert into public.events_private (event_id, submitter_email, submitter_name)
 select id, 'organiser+' || slug || '@example.org', 'Seed organiser'
 from public.events;
