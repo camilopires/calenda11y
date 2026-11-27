@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { db } from '../../../lib/db';
 import { env } from '../../../lib/env';
 import { verifySvix } from '../../../lib/email/webhook';
-import { dropQueuedDigests } from '../../../lib/digest/subscribers';
+import { suppressAddress } from '../../../lib/digest/subscribers';
 
 interface ResendEvent {
   type: string;
@@ -31,17 +31,12 @@ export const POST: APIRoute = async ({ request }) => {
   const reason = event.type === 'email.bounced' ? 'bounced' : 'marked as spam';
   const recipients = [event.data?.to ?? []].flat();
   for (const to of recipients) {
-    const r = await db()
-      .from('digest_subscribers')
-      .update({ suppressed_at: new Date().toISOString(), suppressed_reason: reason })
-      .eq('email', to)
-      .select('id');
-    // Fail so Resend retries; nothing is lost.
-    if (r.error) return new Response('Could not record', { status: 500 });
     try {
-      await dropQueuedDigests(to);
+      // Marks the address suppressed and removes its subscription emails, in one transaction.
+      await suppressAddress(to, reason);
     } catch (error) {
-      console.error('[resend webhook] could not drop queued digests', error);
+      // Fail so Resend retries; nothing is lost.
+      console.error('[resend webhook] could not suppress the address', error);
       return new Response('Could not record', { status: 500 });
     }
   }

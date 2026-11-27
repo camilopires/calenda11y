@@ -171,7 +171,7 @@ describe('instant alerts', () => {
   }, 120_000);
 
   it('a subscriber who unsubscribes has their queued alert dropped', async () => {
-    const { dropQueuedDigests } = await import('../../src/lib/digest/subscribers.ts');
+    const { unsubscribe } = await import('../../src/lib/digest/subscribers.ts');
     const s = await subscriber('IS');
     await db.rpc('enqueue_emails', {
       p_emails: [
@@ -185,7 +185,7 @@ describe('instant alerts', () => {
         },
       ],
     });
-    await dropQueuedDigests(s.email);
+    await unsubscribe(s);
     expect(await mails(s.email)).toEqual([]);
   });
 });

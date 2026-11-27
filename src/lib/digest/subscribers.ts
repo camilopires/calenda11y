@@ -9,7 +9,7 @@
  */
 import { db } from '../db.ts';
 import { env } from '../env.ts';
-import { queued, sendNow } from '../email/outbox.ts';
+import { queued, sendNow, type QueuedEmail } from '../email/outbox.ts';
 import { confirmSubscription, manageSubscription } from '../email/templates.ts';
 import {
   countryName,
@@ -120,6 +120,18 @@ export function describePreferences(p: Preferences): string {
   return `${p.cadence === 'weekly' ? 'a weekly' : 'a monthly'} email of ${formats}${kinds}${where}${nearWords}${cfp}`;
 }
 
+/**
+ * Queues a sign-up email while the subscriber row is locked, so it can't
+ * arrive after the address unsubscribed or bounced. False if it wasn't queued.
+ */
+async function queueFor(subscriberId: string, email: QueuedEmail): Promise<boolean> {
+  return unwrap(
+    await db().rpc('queue_subscriber_email', { p_subscriber: subscriberId, p_email: email }),
+    'supabase',
+    'queueing sign-up email',
+  ) as boolean;
+}
+
 async function sendConfirmation(subscriberId: string, email: string, prefs: Preferences): Promise<void> {
   const token = randomToken();
   unwrap(
@@ -137,13 +149,11 @@ async function sendConfirmation(subscriberId: string, email: string, prefs: Pref
   );
   const link = new URL(`/subscribe/confirm?token=${token}`, env().SITE_URL).href;
   const key = `subscribe:confirm:${subscriberId}:${sha256(token).slice(0, 16)}`;
-  unwrap(
-    await db().rpc('enqueue_emails', {
-      p_emails: [queued('subscribe_confirm', key, email, confirmSubscription(link, describePreferences(prefs)))],
-    }),
-    'supabase',
-    'queueing confirmation',
+  const ok = await queueFor(
+    subscriberId,
+    queued('subscribe_confirm', key, email, confirmSubscription(link, describePreferences(prefs))),
   );
+  if (!ok) return;
   unwrap(
     await db()
       .from('digest_subscribers')
@@ -174,16 +184,11 @@ export async function signUp(email: string, prefs: Preferences): Promise<void> {
 
   if (existing?.confirmed_at) {
     const key = `subscribe:manage:${existing.id}:${Date.now()}`;
-    unwrap(
-      await db().rpc('enqueue_emails', {
-        p_emails: [
-          queued('subscribe_manage', key, email, manageSubscription(manageUrl(existing.id, existing.token_version))),
-        ],
-      }),
-      'supabase',
-      'queueing manage link',
+    const ok = await queueFor(
+      existing.id,
+      queued('subscribe_manage', key, email, manageSubscription(manageUrl(existing.id, existing.token_version))),
     );
-    await sendNow(key);
+    if (ok) await sendNow(key);
     return;
   }
   if (existing) {
@@ -240,21 +245,18 @@ export async function updatePreferences(s: Subscriber, prefs: Preferences): Prom
   if (r.error) throw new ServiceError('supabase', `saving preferences: ${r.error.message}`);
 }
 
-/** Digests and alerts already queued for an address, but not sent, are dropped. */
-export async function dropQueuedDigests(email: string): Promise<void> {
-  const r = await db()
-    .from('email_outbox')
-    .delete()
-    .in('kind', ['digest', 'alert'])
-    .eq('to_email', email)
-    .eq('status', 'queued')
-    .select('id');
-  if (r.error) throw new ServiceError('supabase', `dropping queued digests: ${r.error.message}`);
+/**
+ * Removes the subscriber entirely (we don't keep the address), with the
+ * copies of their subscription emails, in one transaction. One being sent
+ * at that moment is cancelled (see unsubscribe_subscriber).
+ */
+export async function unsubscribe(s: Pick<Subscriber, 'id'>): Promise<void> {
+  const r = await db().rpc('unsubscribe_subscriber', { p_id: s.id });
+  if (r.error) throw new ServiceError('supabase', `unsubscribing: ${r.error.message}`);
 }
 
-/** Removes the subscriber entirely (we don't keep the address), and any digests waiting to go to them. */
-export async function unsubscribe(s: Pick<Subscriber, 'id' | 'email'>): Promise<void> {
-  const r = await db().from('digest_subscribers').delete().eq('id', s.id).select('id');
-  if (r.error) throw new ServiceError('supabase', `unsubscribing: ${r.error.message}`);
-  await dropQueuedDigests(s.email);
+/** A bounce or spam complaint: no more emails to the address, and its subscription emails removed. */
+export async function suppressAddress(email: string, reason: string): Promise<void> {
+  const r = await db().rpc('suppress_address', { p_email: email, p_reason: reason });
+  if (r.error) throw new ServiceError('supabase', `suppressing address: ${r.error.message}`);
 }

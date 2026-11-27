@@ -254,14 +254,16 @@ async function processRun(
   while (Date.now() < deadline) {
     let q = db()
       .from('digest_subscribers')
-      .select(`id,email,${PREF_COLS},confirmed_at,suppressed_at,token_version`)
+      .select(`id,email,${PREF_COLS},confirmed_at,suppressed_at,token_version,prefs_revision`)
       .eq('cadence', cadence)
       .not('confirmed_at', 'is', null)
       .is('suppressed_at', null)
       .order('id')
       .limit(CHECKPOINT);
     if (cursor) q = q.gt('id', cursor);
-    const subs = (unwrap(await q, 'supabase', 'listing subscribers') as unknown as SubscriberRow[]).map(rowToPrefs);
+    const subs = (
+      unwrap(await q, 'supabase', 'listing subscribers') as unknown as Array<SubscriberRow & { prefs_revision: number }>
+    ).map(rowToPrefs);
     if (!subs.length) {
       unwrap(
         await db()
@@ -274,7 +276,7 @@ async function processRun(
       );
       return { finished: true, counts };
     }
-    const emails = [];
+    const items = [];
     let last = cursor;
     for (const s of subs) {
       // Check the time between subscribers, so a slow batch can't run past the budget.
@@ -296,8 +298,13 @@ async function processRun(
         counts.nothing_to_send = (counts.nothing_to_send ?? 0) + 1;
         continue;
       }
-      emails.push(
-        queued(
+      // Queued with the choices it was made for: queue_digests skips anyone
+      // who left, bounced or changed their choices since they were read.
+      items.push({
+        subscriber: s.id,
+        cadence,
+        revision: s.prefs_revision,
+        email: queued(
           'digest',
           `digest:${run.id}:${s.id}`,
           s.email,
@@ -314,11 +321,12 @@ async function processRun(
           ),
           unsubscribeHeaders(s.id, s.token_version),
         ),
-      );
+      });
     }
-    if (emails.length) {
-      unwrap(await db().rpc('enqueue_emails', { p_emails: emails }), 'supabase', 'queueing digests');
-      counts.queued = (counts.queued ?? 0) + emails.length;
+    if (items.length) {
+      const n = unwrap(await db().rpc('queue_digests', { p_items: items }), 'supabase', 'queueing digests') as number;
+      counts.queued = (counts.queued ?? 0) + n;
+      if (n < items.length) counts.not_queued = (counts.not_queued ?? 0) + items.length - n;
     }
     if (last !== cursor) {
       cursor = last;
