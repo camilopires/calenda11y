@@ -293,7 +293,8 @@ test.describe('event pages', () => {
     // Changing the place looks it up again; clearing it drops the place.
     await page.getByLabel('Near').fill('Lisbon');
     await page.getByRole('button', { name: 'Show events' }).click();
-    await expect(page.locator('#results-count')).toContainText('within 25 km of Lisbon, Portugal');
+    // "Within" showed 25 miles (about 40 km), so Lisbon gets the nearest km choice.
+    await expect(page.locator('#results-count')).toContainText('within 50 km of Lisbon, Portugal');
     await expect(page.getByRole('link', { name: 'Lisbon Inclusive Design Meetup' })).toBeVisible();
     await page.getByLabel('Near').fill('');
     await page.getByRole('button', { name: 'Show events' }).click();

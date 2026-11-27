@@ -175,10 +175,12 @@ test.describe('email digest', () => {
     const email = `near-${uniq()}@example.test`;
     await page.goto('/subscribe/email?near=Chatham%2C%20Kent%2C%20United%20Kingdom&at=51.3807,0.5214&u=mi&within=25');
     await expect(page.getByLabel('Near')).toHaveValue('Chatham, Kent, United Kingdom');
+    await expect(page.getByRole('link', { name: 'OpenStreetMap' })).toBeVisible();
     await page.getByLabel('Email address').fill(email);
     await page.getByRole('radio', { name: /^Weekly/ }).check();
     await page.getByRole('button', { name: 'Continue' }).click();
     await expect(page.locator('.check-answers')).toContainText('within 25 miles of Chatham, Kent, United Kingdom');
+    await expect(page.getByRole('link', { name: 'OpenStreetMap' })).toBeVisible();
     await page.getByRole('button', { name: 'Sign up' }).click();
     const confirmUrl = linkIn(sentEmails().find((m) => m.to === email)!.text, '/subscribe/confirm');
     await page.goto(confirmUrl.pathname + confirmUrl.search);

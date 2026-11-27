@@ -120,6 +120,11 @@ const countries = await allCountries();
   <input type="checkbox" id="f-near_online" name="near_online" checked={v.nearOnline} />
   <label for="f-near_online">With a place, also include online events</label>
 </div>
+{(placed || placeChoices) && (
+  <p class="small">
+    Place search by <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>.
+  </p>
+)}
 <ChoiceGroup
   name="topic"
   legend="Only these topics"

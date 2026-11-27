@@ -132,6 +132,11 @@ if (Astro.request.method === 'POST') {
             { label: 'You will get', value: describePreferences(checked.prefs), field: 'f-cadence' },
           ]}
         />
+        {checked.prefs.near && (
+          <p class="small">
+            Place search by <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>.
+          </p>
+        )}
         <p>We'll send a link to confirm. You can unsubscribe at any time with one click.</p>
         <div class="button-row">
           <button type="submit" name="step" value="confirm">

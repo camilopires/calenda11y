@@ -124,4 +124,10 @@ const listQs = keep.toString();
   </nav>
 
   <MonthGrid grid={grid} dayHref={dayHref} />
+
+  {parsed.filters.near && (
+    <p class="small">
+      Place search by <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>.
+    </p>
+  )}
 </BaseLayout>

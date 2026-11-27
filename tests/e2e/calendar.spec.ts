@@ -243,6 +243,12 @@ test.describe('calendar integrations', () => {
       await service().from('events').delete().eq('id', ev!.id);
     }
   });
+  test('a calendar near a place credits OpenStreetMap', async ({ page }) => {
+    await page.goto('/calendar?near=Chatham&at=51.3807,0.5214&u=mi&within=25');
+    await expect(page.getByRole('link', { name: 'OpenStreetMap' })).toBeVisible();
+    await page.goto('/calendar');
+    await expect(page.getByRole('link', { name: 'OpenStreetMap' })).toHaveCount(0);
+  });
   test('feeds take a place from the link, and never look one up', async ({ request }) => {
     const near = parseIcs(
       await (await request.get('/feeds/events.ics?at=51.3807,0.5214&u=mi&within=25&near=Chatham')).text(),
