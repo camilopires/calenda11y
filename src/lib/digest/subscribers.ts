@@ -179,12 +179,12 @@ export async function updatePreferences(s: Subscriber, prefs: Preferences): Prom
   if (r.error) throw new ServiceError('supabase', `saving preferences: ${r.error.message}`);
 }
 
-/** Digests already queued for an address, but not sent, are dropped. */
+/** Digests and alerts already queued for an address, but not sent, are dropped. */
 export async function dropQueuedDigests(email: string): Promise<void> {
   const r = await db()
     .from('email_outbox')
     .delete()
-    .eq('kind', 'digest')
+    .in('kind', ['digest', 'alert'])
     .eq('to_email', email)
     .eq('status', 'queued')
     .select('id');

@@ -1,6 +1,7 @@
 /** The jobs calenda11y runs, and how often. Imported once by the tick endpoint. */
 import { db } from '../db.ts';
 import { sendOutbox } from '../email/outbox.ts';
+import { runAlerts } from '../alerts/send.ts';
 import { runDigest } from '../digest/send.ts';
 import { runImport } from '../imports/run.ts';
 import type { ImportSource } from '../imports/types.ts';
@@ -21,6 +22,9 @@ registerJobs(async () => {
     // Checked hourly; each sends at most once per period.
     { key: 'digest:weekly', kind: 'digest' as const, interval_seconds: HOUR },
     { key: 'digest:monthly', kind: 'digest' as const, interval_seconds: HOUR },
+    // Alerts: instant ones each tick (about every 10 minutes); daily ones checked hourly, sent once a day.
+    { key: 'alerts:instant', kind: 'alerts' as const, interval_seconds: 600 },
+    { key: 'alerts:daily', kind: 'alerts' as const, interval_seconds: HOUR },
     ...sources.map((s) => ({ key: `import:${s.id}`, kind: 'import' as const, interval_seconds: 6 * HOUR })),
   ];
 });
@@ -54,6 +58,11 @@ registerHandler('cleanup', async () => {
     number
   >;
   return { finished: true, ok: true, counts: { ...counts, ...digest } };
+});
+
+registerHandler('alerts', async (job, deadline) => {
+  const r = await runAlerts(job.key === 'alerts:daily' ? 'daily' : 'instant', deadline);
+  return { finished: r.finished, ok: true, counts: r.counts };
 });
 
 registerHandler('digest', async (job, deadline) => {

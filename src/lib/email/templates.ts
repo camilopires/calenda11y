@@ -182,6 +182,57 @@ export function digestEmail(
   );
 }
 
+/** An event in an alert, with what changed (empty for new events). */
+export interface AlertItem {
+  title: string;
+  url: string;
+  when: string;
+  where: string;
+  summary: string;
+  reasons: string[];
+}
+
+/** New and changed events since the person's last alert. */
+export function alertEmail(
+  added: AlertItem[],
+  updated: AlertItem[],
+  manageLink: string,
+  unsubscribeLink: string,
+  options: { total?: number; listUrl?: string } = {},
+): EmailContent {
+  const shown = added.length + updated.length;
+  const total = options.total ?? shown;
+  const list = (items: AlertItem[]): Block => ({
+    type: 'list',
+    items: items.map((i) => ({
+      text: i.title,
+      href: i.url,
+      detail: [...i.reasons, `${i.when}. ${i.where}. ${i.summary}`].join('. '),
+    })),
+  });
+  const heading = 'New and updated accessibility events';
+  return renderEmail(
+    heading,
+    heading,
+    [
+      ...(added.length ? [{ type: 'h2' as const, text: 'New' }, list(added)] : []),
+      ...(updated.length ? [{ type: 'h2' as const, text: 'Updated' }, list(updated)] : []),
+      ...(total > shown && options.listUrl
+        ? [
+            { type: 'p' as const, text: `These are the first ${shown} of ${total}. See everything new on calenda11y:` },
+            { type: 'link' as const, text: 'See all events on calenda11y', href: options.listUrl },
+          ]
+        : []),
+      ...zoneBlocks([...added, ...updated].map((i) => i.when)),
+    ],
+    [
+      { type: 'p', text: 'You get this because you asked for alerts from calenda11y.' },
+      { type: 'link', text: 'Change what you get', href: manageLink },
+      { type: 'link', text: 'Unsubscribe', href: unsubscribeLink },
+    ],
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Sponsor emails
 // ---------------------------------------------------------------------------
