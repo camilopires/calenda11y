@@ -78,6 +78,20 @@ describe('the change log', () => {
     expect(rows[7]!.after).toMatchObject({ city: 'Porto', step_free: true });
   });
 
+  it('logs "new" once when an event is first made public as cancelled, and not again on republishing', async () => {
+    const e = await event({ types: ['meetup'] });
+    await db.from('events').update({ status: 'cancelled' }).eq('id', e.id);
+    expect((await changesFor(e.id)).map((r) => r.kind)).toEqual(['new']);
+    await db.from('events').update({ status: 'pending' }).eq('id', e.id);
+    await db.from('events').update({ status: 'approved' }).eq('id', e.id);
+    expect((await changesFor(e.id)).map((r) => r.kind)).toEqual(['new']);
+  });
+
+  it('snapshots include when the event ends', async () => {
+    const e = await event({ status: 'approved' });
+    expect((await changesFor(e.id))[0]!.after).toMatchObject({ end_instant: expect.any(String) });
+  });
+
   it('is never readable by anon', async () => {
     expect((await anon().from('event_changes').select('id').limit(1)).error).not.toBeNull();
   });
@@ -123,6 +137,17 @@ const mail = (key: string) => ({
 });
 
 describe('subscriber baseline and revision', () => {
+  it('confirming numbers changes already committed and starts after them', async () => {
+    const e = await event({ status: 'approved' });
+    // Committed but not numbered yet (no alert run since).
+    const { data: before } = await db.from('event_changes').select('id,seq').eq('event_id', e.id).single();
+    expect(before!.seq).toBeNull();
+    const s = await subscriber({ confirmed_at: new Date().toISOString() });
+    const { data: after } = await db.from('event_changes').select('seq').eq('id', before!.id).single();
+    expect(after!.seq).not.toBeNull();
+    expect(s.alert_cursor).toBeGreaterThanOrEqual(after!.seq);
+  });
+
   it('confirming an alert subscription sets the baseline; saving preferences bumps the revision', async () => {
     await db.rpc('sequence_changes');
     const s = await subscriber();

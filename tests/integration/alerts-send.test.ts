@@ -102,6 +102,44 @@ describe('instant alerts', () => {
     expect(body).toContain('Moved to: New Hall, Somewhere, San Marino');
   });
 
+  it('describes each change as it was at the round, so a later cancellation is told once, in the next round', async () => {
+    const [id] = await events('LU', 1);
+    const s = await subscriber('LU');
+    await db.from('events').update({ venue: 'Hall A' }).eq('id', id!);
+    // Round 1 starts and stops before reaching anyone; then the event is cancelled.
+    await runAlerts('instant', LATER, NOW, { maxSubscribers: 0 });
+    await db.from('events').update({ status: 'cancelled' }).eq('id', id!);
+    await runAlerts('instant', LATER, NOW);
+    let m = await mails(s.email);
+    expect(m).toHaveLength(1);
+    expect(m[0]!.text_body).toContain('Moved to: Hall A');
+    expect(m[0]!.text_body).not.toContain('Cancelled');
+    await runAlerts('instant', LATER, NOW);
+    m = await mails(s.email);
+    expect(m).toHaveLength(2);
+    expect(m.filter((x) => x.text_body.includes('Cancelled'))).toHaveLength(1);
+  });
+
+  it('a round is not closed while someone whose preferences changed is still waiting', async () => {
+    const [id] = await events('LT', 1);
+    const s = await subscriber('LT');
+    await db.from('events').update({ venue: 'Hall B' }).eq('id', id!);
+    // Their preferences change after the run has read them but before it queues.
+    await runAlerts('instant', LATER, NOW, {
+      beforeQueue: async (sub) => {
+        if (sub === s.id) await db.from('digest_subscribers').update({ include_cfp: true }).eq('id', s.id);
+      },
+    });
+    const { data: round } = await db
+      .from('alert_rounds')
+      .select('status')
+      .eq('cadence', 'instant')
+      .eq('status', 'running');
+    expect(round).toHaveLength(1);
+    await runAlerts('instant', LATER, NOW);
+    expect((await mails(s.email))[0]!.text_body).toContain('Moved to: Hall B');
+  });
+
   it('a round cut short continues with the same snapshot, and nobody gets two emails', async () => {
     const a = await subscriber('AD');
     const b = await subscriber('AD');
@@ -167,4 +205,15 @@ describe('daily alerts', () => {
     expect(m).toHaveLength(2);
     expect(m.some((x) => x.text_body.includes(`${tag} MT next`))).toBe(true);
   });
+});
+
+describe('the just-added feed', () => {
+  it('a matching change is still listed after 500 unrelated ones', async () => {
+    const { newFeedEntries } = await import('../../src/lib/alerts/feed.ts');
+    const { parseFilters } = await import('../../src/lib/events/predicates.ts');
+    const [match] = await events('GG', 1, { topics: ['careers'] });
+    await events('JE', 520);
+    const entries = await newFeedEntries(parseFilters(new URLSearchParams('topic=careers')).filters);
+    expect(entries.some((e) => e.event.id === match)).toBe(true);
+  }, 120_000);
 });

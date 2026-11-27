@@ -22,7 +22,7 @@ import { ServiceError, unwrap, unwrapMaybe } from '../result.ts';
 import { manageUrl, unsubscribeHeaders, unsubscribeUrl } from '../digest/links.ts';
 import { SEND_HOUR_UTC } from '../digest/period.ts';
 import type { Subscriber } from '../digest/subscribers.ts';
-import { mergeChanges, reasonLines, type ChangeRow } from './changes.ts';
+import { asOfLastChange, mergeChanges, reasonLines, type ChangeRow } from './changes.ts';
 import { wantsChange } from './match.ts';
 
 export type AlertCadence = 'daily' | 'instant';
@@ -91,7 +91,7 @@ async function changesBetween(from: number, to: number): Promise<ChangeRow[]> {
     const rows = unwrap(
       await db()
         .from('event_changes')
-        .select('seq,event_id,kind,what,before_status')
+        .select('seq,event_id,kind,what,before_status,after')
         .gt('seq', after)
         .lte('seq', to)
         .order('seq')
@@ -151,12 +151,15 @@ function listUrl(s: AlertSubscriber): string {
 
 interface Batch {
   rows: ChangeRow[];
+  byEvent: Map<string, ChangeRow[]>;
   events: Map<string, PublicEvent>;
 }
 
 export interface AlertRunOptions {
   /** For tests: stop after this many subscribers, as if time ran out. */
   maxSubscribers?: number;
+  /** For tests: runs just before a subscriber's alert is queued. */
+  beforeQueue?: (subscriberId: string) => Promise<void>;
 }
 
 export async function runAlerts(
@@ -190,6 +193,17 @@ export async function runAlerts(
     const page = (unwrap(await q, 'supabase', 'listing alert subscribers') as AlertSubscriber[]).filter(
       (s) => !refused.has(s.id),
     );
+    if (!page.length && refused.size) {
+      // Only people whose details changed while we worked are left: keep the
+      // round open so the next run tries them again with their new details.
+      unwrap(
+        await db().from('alert_rounds').update({ counts }).eq('id', round.id).select('id'),
+        'supabase',
+        'saving alert progress',
+      );
+      if (queuedCount) await sendNow(`alert:${cadence}:${round.snapshot_seq}:`);
+      return { finished: true, counts };
+    }
     if (!page.length) {
       unwrap(
         await db()
@@ -218,14 +232,19 @@ export async function runAlerts(
       let batch = batches.get(s.alert_cursor);
       if (!batch) {
         const rows = await changesBetween(s.alert_cursor, round.snapshot_seq);
-        batch = { rows, events: await eventsById([...new Set(rows.map((r) => r.event_id))]) };
+        const byEvent = new Map<string, ChangeRow[]>();
+        for (const r of rows) byEvent.set(r.event_id, [...(byEvent.get(r.event_id) ?? []), r]);
+        batch = { rows, byEvent, events: await eventsById([...byEvent.keys()]) };
         batches.set(s.alert_cursor, batch);
       }
       const added: AlertItem[] = [];
       const updated: AlertItem[] = [];
       for (const [eventId, m] of mergeChanges(batch.rows)) {
-        const e = batch.events.get(eventId);
-        if (!e || !wantsChange(e, m, s, now)) continue;
+        const current = batch.events.get(eventId);
+        // Not public any more: nothing to tell.
+        if (!current) continue;
+        const e = asOfLastChange(current, batch.byEvent.get(eventId) ?? []);
+        if (!wantsChange(e, m, s, now)) continue;
         (m.isNew ? added : updated).push(itemFor(e, reasonLines(e, m)));
       }
       const total = added.length + updated.length;
@@ -249,6 +268,7 @@ export async function runAlerts(
             unsubscribeHeaders(s.id, s.token_version),
           )
         : null;
+      await options.beforeQueue?.(s.id);
       const ok = unwrap(
         await db().rpc('queue_alert', {
           p_subscriber: s.id,

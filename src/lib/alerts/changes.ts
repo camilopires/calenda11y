@@ -19,6 +19,8 @@ export interface ChangeRow {
   kind: 'new' | 'updated';
   what: ChangeReason[];
   before_status: Status | null;
+  /** The event's reported fields right after this change. */
+  after?: Record<string, unknown>;
 }
 
 export interface MergedChange {
@@ -27,6 +29,18 @@ export interface MergedChange {
   what: Set<Exclude<ChangeReason, 'cancelled' | 'restored'>>;
   /** The status before the first change in the batch. */
   statusBefore: Status | null;
+}
+
+/**
+ * The event as it was at the last of these changes: the current row (for
+ * fields the log doesn't track, like the title) with the last snapshot on
+ * top. Alerts describe this, so a change made after a round's cut-off is
+ * left for the next round instead of leaking into this one.
+ */
+export function asOfLastChange(current: PublicEvent, rows: readonly ChangeRow[]): PublicEvent {
+  let last: ChangeRow | undefined;
+  for (const r of rows) if (!last || r.seq > last.seq) last = r;
+  return last?.after ? ({ ...current, ...last.after } as PublicEvent) : current;
 }
 
 /** One entry per event, in the order each event first appears. */

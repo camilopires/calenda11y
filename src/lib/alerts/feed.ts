@@ -15,7 +15,11 @@ import { unwrap } from '../result.ts';
 import { reasonLines, type ChangeReason } from './changes.ts';
 
 const DAYS = 30;
+/** Entries in the feed, at most. */
 const MAX_ITEMS = 500;
+/** Changes read at a time, and how many pages at most. */
+const PAGE = 500;
+const MAX_PAGES = 20;
 /** Event ids per lookup (more makes the request address too long). */
 const CHUNK = 80;
 
@@ -71,18 +75,33 @@ export async function newFeedEntries(
   c: Clock = clock(),
 ): Promise<Array<{ change: FeedChange; event: PublicEvent }>> {
   const since = new Date(Date.parse(c.now) - DAYS * 86_400_000).toISOString();
-  const changes = unwrap(
-    await db()
+  const out: Array<{ change: FeedChange; event: PublicEvent }> = [];
+  // Filter as we go, page by page, so unrelated changes can't push matching
+  // ones out of the feed. Bounded, so a busy month can't make it slow.
+  let before: number | null = null;
+  for (let page = 0; page < MAX_PAGES && out.length < MAX_ITEMS; page++) {
+    let q = db()
       .from('event_changes')
       .select('id,event_id,kind,what,before_status,after,created_at')
       .gt('created_at', since)
-      .order('created_at', { ascending: false })
       .order('id', { ascending: false })
-      .limit(MAX_ITEMS),
-    'supabase',
-    'reading recent changes',
-  ) as Array<FeedChange & { event_id: string }>;
-  const ids = [...new Set(changes.map((ch) => ch.event_id))];
+      .limit(PAGE);
+    if (before !== null) q = q.lt('id', before);
+    const changes = unwrap(await q, 'supabase', 'reading recent changes') as Array<FeedChange & { event_id: string }>;
+    if (!changes.length) break;
+    before = changes[changes.length - 1]!.id;
+    const events = await matchingEvents([...new Set(changes.map((ch) => ch.event_id))], filters, c);
+    for (const ch of changes) {
+      const event = events.get(ch.event_id);
+      if (event && out.length < MAX_ITEMS) out.push({ change: ch, event });
+    }
+    if (changes.length < PAGE) break;
+  }
+  return out;
+}
+
+/** The public events among these ids that match the filters. */
+async function matchingEvents(ids: string[], filters: Filters, c: Clock): Promise<Map<string, PublicEvent>> {
   const events = new Map<string, PublicEvent>();
   for (let i = 0; i < ids.length; i += CHUNK) {
     const q = db()
@@ -96,5 +115,5 @@ export async function newFeedEntries(
     ) as unknown as PublicEvent[];
     for (const e of rows) events.set(e.id, e);
   }
-  return changes.filter((ch) => events.has(ch.event_id)).map((ch) => ({ change: ch, event: events.get(ch.event_id)! }));
+  return events;
 }
