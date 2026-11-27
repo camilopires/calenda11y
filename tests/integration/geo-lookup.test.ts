@@ -70,6 +70,23 @@ describe('lookupPlace', () => {
     expect(Math.abs(times[0]![1] - times[1]![1])).toBeGreaterThanOrEqual(950);
   });
 
+  it('refused searches do not push the next one back', async () => {
+    await db.from('geocode_slots').upsert({ key: 'nominatim', next_at: new Date(Date.now() + 3500).toISOString() });
+    for (const ip of ['203.0.113.7', '203.0.113.8', '203.0.113.9'])
+      expect(await lookupPlace('Lisbon', { ip })).toEqual({ ok: false, reason: 'busy' });
+    const { data } = await db.from('geocode_slots').select('next_at').eq('key', 'nominatim').single();
+    expect(Date.parse(data!.next_at) - Date.now()).toBeLessThan(3600);
+  });
+
+  it('the same place searched at once is asked for only once', async () => {
+    const both = await Promise.all([
+      lookupPlace('Lisbon', { ip: '203.0.113.10' }),
+      lookupPlace('lisbon', { ip: '203.0.113.11' }),
+    ]);
+    expect(both[0]).toEqual(both[1]);
+    expect(fake.calls).toHaveLength(1);
+  });
+
   it('reports a failing service without caching it', async () => {
     setGeocoder({
       search: async () => {

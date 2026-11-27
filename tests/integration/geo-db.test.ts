@@ -84,10 +84,28 @@ describe('geocode spacing', () => {
   it('reservations made at once are spaced apart, whatever the window edges', async () => {
     const key = `${tag}-spacing`;
     const slots = await Promise.all(
-      Array.from({ length: 5 }, () => db.rpc('reserve_geocode_slot', { p_key: key, p_spacing_ms: 1000 })),
+      Array.from({ length: 5 }, () =>
+        db.rpc('reserve_geocode_slot', {
+          p_key: key,
+          p_spacing_ms: 1000,
+          p_not_after: new Date(Date.now() + 60_000).toISOString(),
+        }),
+      ),
     );
     const times = slots.map((s) => Date.parse(s.data as string)).sort((a, b) => a - b);
     for (let i = 1; i < times.length; i++) expect(times[i]! - times[i - 1]!).toBeGreaterThanOrEqual(1000);
+  });
+
+  it('a turn that would start too late is refused, and takes nothing from the queue', async () => {
+    const key = `${tag}-refused`;
+    const soon = () => new Date(Date.now() + 1500).toISOString();
+    const take = () => db.rpc('reserve_geocode_slot', { p_key: key, p_spacing_ms: 1000, p_not_after: soon() });
+    expect((await take()).data).not.toBeNull();
+    expect((await take()).data).not.toBeNull();
+    // The next free turn is about 2 seconds away: refused, however often asked.
+    for (let i = 0; i < 5; i++) expect((await take()).data).toBeNull();
+    const { data } = await db.from('geocode_slots').select('next_at').eq('key', key).single();
+    expect(Date.parse(data!.next_at) - Date.now()).toBeLessThan(2100);
   });
 });
 

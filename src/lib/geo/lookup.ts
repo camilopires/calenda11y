@@ -27,22 +27,21 @@ export const placeKey = (query: string) => query.trim().toLowerCase().replace(/\
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function reserve(key: string, spacing: number): Promise<number> {
-  const at = unwrap(
-    await db().rpc('reserve_geocode_slot', { p_key: key, p_spacing_ms: spacing }),
+/** A turn in the queue, or null (and nothing taken) if the next one starts after `notAfter`. */
+async function reserve(key: string, spacing: number, notAfter: number): Promise<number | null> {
+  const at = unwrapMaybe(
+    await db().rpc('reserve_geocode_slot', {
+      p_key: key,
+      p_spacing_ms: spacing,
+      p_not_after: new Date(notAfter).toISOString(),
+    }),
     'supabase',
     'reserving a lookup slot',
-  ) as string;
-  return Date.parse(at);
+  ) as string | null;
+  return at === null ? null : Date.parse(at);
 }
 
-export async function lookupPlace(
-  query: string,
-  options: { ip?: string; job?: { deadline: number; spacingMs?: number } } = {},
-): Promise<LookupResult> {
-  const key = placeKey(query);
-  if (!key) return { ok: true, places: [] };
-
+async function fromCache(key: string): Promise<Place[] | null> {
   const cached = unwrapMaybe(
     await db()
       .from('place_lookups')
@@ -53,25 +52,47 @@ export async function lookupPlace(
     'supabase',
     'reading place cache',
   ) as { results: Place[] } | null;
-  if (cached) return { ok: true, places: cached.results };
+  return cached?.results ?? null;
+}
+
+async function waitUntil(at: number): Promise<void> {
+  if (at > Date.now()) await sleep(at - Date.now());
+}
+
+export async function lookupPlace(
+  query: string,
+  options: { ip?: string; job?: { deadline: number; spacingMs?: number } } = {},
+): Promise<LookupResult> {
+  const key = placeKey(query);
+  if (!key) return { ok: true, places: [] };
+
+  const cached = await fromCache(key);
+  if (cached) return { ok: true, places: cached };
 
   if (env().GEOCODER_OFF === '1') return { ok: false, reason: 'off' };
   if (options.ip && !(await allow(LIMITS.placeSearchPerIp, options.ip))) return { ok: false, reason: 'busy' };
 
   // The job keeps to 4 a minute: it waits for its own turn first, and only
   // then takes a place in the shared queue, so its request keeps the
-  // 1-second spacing with everyone else's.
+  // 1-second spacing with everyone else's. A turn that would start too late
+  // isn't taken, so refused searches don't push others back.
   if (options.job) {
-    const jobAt = await reserve('nominatim-job', options.job.spacingMs ?? JOB_SPACING_MS);
-    if (jobAt > options.job.deadline) return { ok: false, reason: 'busy' };
-    if (jobAt > Date.now()) await sleep(jobAt - Date.now());
+    const jobAt = await reserve('nominatim-job', options.job.spacingMs ?? JOB_SPACING_MS, options.job.deadline);
+    if (jobAt === null) return { ok: false, reason: 'busy' };
+    await waitUntil(jobAt);
   }
   // Everyone together keeps to 1 a second.
-  const startAt = await reserve('nominatim', SPACING_MS);
-  const wait = startAt - Date.now();
-  if (!options.job && wait > MAX_VISITOR_WAIT_MS) return { ok: false, reason: 'busy' };
-  if (options.job && startAt > options.job.deadline) return { ok: false, reason: 'busy' };
-  if (wait > 0) await sleep(wait);
+  const startAt = await reserve(
+    'nominatim',
+    SPACING_MS,
+    options.job ? options.job.deadline : Date.now() + MAX_VISITOR_WAIT_MS,
+  );
+  if (startAt === null) return { ok: false, reason: 'busy' };
+  await waitUntil(startAt);
+
+  // Someone else may have looked the same place up while this one waited.
+  const meanwhile = await fromCache(key);
+  if (meanwhile) return { ok: true, places: meanwhile };
 
   let places: Place[];
   try {
