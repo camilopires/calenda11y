@@ -242,7 +242,7 @@ describe('email outbox', () => {
     await db.rpc('claim_outbox', { p_limit: 1, p_lease_seconds: 60, p_ids: [id] });
     await db
       .from('email_outbox')
-      .update({ lease_until: new Date(Date.now() - 1000).toISOString() })
+      .update({ lease_until: new Date(Date.now() - 10 * 60_000).toISOString() })
       .eq('id', id!);
     const again = await db.rpc('claim_outbox', { p_limit: 1, p_lease_seconds: 60, p_ids: [id] });
     expect(again.data).toHaveLength(1);
@@ -251,7 +251,7 @@ describe('email outbox', () => {
     await db
       .from('email_outbox')
       .update({
-        lease_until: new Date(Date.now() - 1000).toISOString(),
+        lease_until: new Date(Date.now() - 10 * 60_000).toISOString(),
         first_sent_attempt_at: new Date(Date.now() - 25 * 3600_000).toISOString(),
       })
       .eq('id', id!);
@@ -287,7 +287,7 @@ describe('review regressions: outbox', () => {
         // While "sending", the lease expires and another sender claims it.
         await db
           .from('email_outbox')
-          .update({ lease_until: new Date(Date.now() - 1000).toISOString() })
+          .update({ lease_until: new Date(Date.now() - 10 * 60_000).toISOString() })
           .eq('id', id!);
         await db.rpc('claim_outbox', { p_limit: 1, p_lease_seconds: 60, p_ids: [id] });
         return { id: 'provider-1' };
