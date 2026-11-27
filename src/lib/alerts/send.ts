@@ -135,6 +135,7 @@ function itemFor(e: PublicEvent, reasons: string[]): AlertItem {
         : [e.city, e.country_code ? countryName(e.country_code) : null].filter(Boolean).join(', '),
     summary: e.summary,
     reasons,
+    lang: e.lang,
   };
 }
 

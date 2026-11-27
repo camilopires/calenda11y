@@ -296,4 +296,22 @@ test.describe('email digest', () => {
       await expectNoAxeViolations(page, 'email');
     }
   });
+
+  test('every link in an email is at least 44 by 44 pixels, even a one-letter title', async ({ page }) => {
+    const e = digestEmail(
+      'Accessibility events',
+      [{ title: 'A', url: 'https://calenda11y.org/events/a', when: 'Monday', where: 'Online', summary: 'S.' }],
+      'https://calenda11y.org/subscribe/manage?token=t',
+      'https://calenda11y.org/api/unsubscribe?token=t',
+    );
+    await page.setContent(e.html);
+    const sizes = await page
+      .locator('a')
+      .evaluateAll((links) => links.map((a) => ({ t: a.textContent, ...a.getBoundingClientRect().toJSON() })));
+    expect(sizes.length).toBeGreaterThan(3);
+    for (const s of sizes) {
+      expect(s.width, `${s.t} width`).toBeGreaterThanOrEqual(44);
+      expect(s.height, `${s.t} height`).toBeGreaterThanOrEqual(44);
+    }
+  });
 });

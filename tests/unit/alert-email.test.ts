@@ -39,3 +39,11 @@ describe('alertEmail', () => {
     expect(e.text).toContain('https://x.test/?country=PT');
   });
 });
+
+describe('alert language (WCAG 3.1.2)', () => {
+  it('marks the title and summary of a non-English event', () => {
+    const e = alertEmail([{ ...item('Encontro'), summary: 'Palestras.', lang: 'pt' }], [], 'https://m', 'https://u');
+    expect(e.html).toMatch(/<a lang="pt"[^>]*>Encontro<\/a>/);
+    expect(e.html).toContain('<span lang="pt">Palestras.</span>');
+  });
+});

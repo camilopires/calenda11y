@@ -2,7 +2,7 @@
 import { env } from '../env.ts';
 import { describeWhen } from '../events/dates.ts';
 import { zoneNote } from '../text/abbr.ts';
-import { renderEmail, type Block, type EmailContent } from './render.ts';
+import { renderEmail, type Block, type EmailContent, type Inline } from './render.ts';
 
 const site = () => env().SITE_URL;
 const url = (path: string) => new URL(path, site()).href;
@@ -16,7 +16,12 @@ interface EventLike {
   local_start_date: string;
   local_end_date: string;
   timezone: string;
+  /** The language the event is written in. */
+  lang?: string | null;
 }
+
+/** An event's title, marked with its language, for quoting in an English sentence. */
+const titleOf = (e: { title: string; lang?: string | null }): Inline => ({ text: e.title, lang: e.lang });
 
 const whenText = (e: EventLike) => {
   const w = describeWhen(e);
@@ -31,7 +36,7 @@ const zoneBlocks = (times: string[]): Block[] => {
 
 export function submissionReceived(e: EventLike): EmailContent {
   return renderEmail(`We've got your event: ${e.title}`, 'Thanks, we have your event', [
-    { type: 'p', text: `You added "${e.title}" (${whenText(e)}) to calenda11y.` },
+    { type: 'p', text: ['You added "', titleOf(e), `" (${whenText(e)}) to calenda11y.`] },
     ...zoneBlocks([whenText(e)]),
     {
       type: 'p',
@@ -43,7 +48,7 @@ export function submissionReceived(e: EventLike): EmailContent {
 
 export function newSubmissionForAdmins(e: EventLike & { id: string }, flags: string[]): EmailContent {
   return renderEmail(`New event to check: ${e.title}`, 'A new event is waiting for review', [
-    { type: 'p', text: `"${e.title}", ${whenText(e)}.` },
+    { type: 'p', text: ['"', titleOf(e), `", ${whenText(e)}.`] },
     ...zoneBlocks([whenText(e)]),
     ...(flags.length ? [{ type: 'p' as const, text: `Flags: ${flags.join(', ')}.` }] : []),
     { type: 'link', text: 'Review the event', href: url(`/admin/events/${e.id}`) },
@@ -52,7 +57,7 @@ export function newSubmissionForAdmins(e: EventLike & { id: string }, flags: str
 
 export function eventApproved(e: EventLike): EmailContent {
   return renderEmail(`Your event is published: ${e.title}`, 'Your event is published', [
-    { type: 'p', text: `"${e.title}" is now on calenda11y.` },
+    { type: 'p', text: ['"', titleOf(e), '" is now on calenda11y.'] },
     { type: 'link', text: 'See your event', href: url(`/events/${e.slug}`) },
     { type: 'p', text: 'If any details change, reply to this email or use "Report a problem" on the event page.' },
   ]);
@@ -60,7 +65,7 @@ export function eventApproved(e: EventLike): EmailContent {
 
 export function eventRejected(e: EventLike, reason: string): EmailContent {
   return renderEmail(`Your event was not published: ${e.title}`, 'We did not publish your event', [
-    { type: 'p', text: `We checked "${e.title}" and did not publish it, for this reason:` },
+    { type: 'p', text: ['We checked "', titleOf(e), '" and did not publish it, for this reason:'] },
     { type: 'p', text: reason },
     { type: 'p', text: 'If you can fix this, you are welcome to add the event again.' },
     { type: 'link', text: 'Add an event', href: url('/submit') },
@@ -68,12 +73,12 @@ export function eventRejected(e: EventLike, reason: string): EmailContent {
 }
 
 export function reportForAdmins(
-  e: { id: string; title: string },
+  e: { id: string; title: string; lang?: string | null },
   reason: string,
   details: string | null,
 ): EmailContent {
   return renderEmail(`Problem reported: ${e.title}`, 'Someone reported a problem with an event', [
-    { type: 'p', text: `Event: "${e.title}".` },
+    { type: 'p', text: ['Event: "', titleOf(e), '".'] },
     { type: 'p', text: `Reason: ${reason}.` },
     ...(details ? [{ type: 'p' as const, text: `Details: ${details}` }] : []),
     { type: 'link', text: 'See open reports', href: url('/admin/reports') },
@@ -115,6 +120,8 @@ export interface DigestItem {
   summary: string;
   /** "Call for speakers: apply by ...", when the event has one. */
   cfp?: string | null;
+  /** The language the title and summary are written in. */
+  lang?: string | null;
 }
 
 /** A call for speakers in the digest's "closing soon" section. */
@@ -126,6 +133,8 @@ export interface CfpItem {
   deadline: string;
   /** When and where the event is. */
   event: string;
+  /** The language the title is written in. */
+  lang?: string | null;
 }
 
 export function digestEmail(
@@ -155,7 +164,9 @@ export function digestEmail(
               items: items.map((i) => ({
                 text: i.title,
                 href: i.url,
-                detail: `${i.when}. ${i.where}. ${i.summary}${i.cfp ? ` ${i.cfp}.` : ''}`,
+                detail: `${i.when}. ${i.where}.${i.cfp ? ` ${i.cfp}.` : ''}`,
+                summary: i.summary,
+                lang: i.lang,
               })),
             },
           ]
@@ -165,7 +176,13 @@ export function digestEmail(
             { type: 'h2' as const, text: 'Calls for speakers closing soon' },
             {
               type: 'list' as const,
-              items: calls.map((c) => ({ text: `${c.deadline}: ${c.title}`, href: c.url, detail: `${c.event}.` })),
+              // The English deadline goes in the details, so the link is only the (possibly non-English) title.
+              items: calls.map((c) => ({
+                text: c.title,
+                href: c.url,
+                detail: `${c.deadline}. ${c.event}.`,
+                lang: c.lang,
+              })),
             },
           ]
         : []),
@@ -190,6 +207,8 @@ export interface AlertItem {
   where: string;
   summary: string;
   reasons: string[];
+  /** The language the title and summary are written in. */
+  lang?: string | null;
 }
 
 /** New and changed events since the person's last alert. */
@@ -207,7 +226,9 @@ export function alertEmail(
     items: items.map((i) => ({
       text: i.title,
       href: i.url,
-      detail: [...i.reasons, `${i.when}. ${i.where}. ${i.summary}`].join('. '),
+      detail: [...i.reasons, `${i.when}. ${i.where}.`].join('. '),
+      summary: i.summary,
+      lang: i.lang,
     })),
   });
   const heading = 'New and updated accessibility events';

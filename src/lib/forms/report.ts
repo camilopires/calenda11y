@@ -33,7 +33,7 @@ export function validateReport(v: ReportValues): FieldErrors {
 }
 
 export async function createReport(
-  event: { id: string; title: string },
+  event: { id: string; title: string; lang?: string | null },
   v: ReportValues,
   nonce: string,
 ): Promise<'created' | 'already_submitted'> {

@@ -114,6 +114,7 @@ function cfpItem(e: PublicEvent): CfpItem {
     deadline:
       e.cfp_capped || !e.cfp_last_day ? 'Apply before the event starts' : `Apply by ${formatLongDate(e.cfp_last_day)}`,
     event: `${formatLongDate(e.local_start_date)}, ${placeOf(e)}`,
+    lang: e.lang,
   };
 }
 
@@ -181,6 +182,7 @@ function item(e: PublicEvent): DigestItem {
     where: placeOf(e),
     summary: e.summary,
     cfp: cfpDeadline(e),
+    lang: e.lang,
   };
 }
 
