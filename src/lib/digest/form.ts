@@ -10,7 +10,7 @@ import {
   type Format,
 } from '../events/model.ts';
 import { isCountryCode } from '../events/predicates.ts';
-import type { Preferences } from './subscribers.ts';
+import { CADENCES, type Preferences } from './subscribers.ts';
 
 export interface PreferenceValues {
   cadence: string;
@@ -51,7 +51,7 @@ export type PreferenceValidation = { ok: true; prefs: Preferences } | { ok: fals
 
 export function validatePreferences(v: PreferenceValues): PreferenceValidation {
   const errors: FieldErrors = {};
-  if (v.cadence !== 'weekly' && v.cadence !== 'monthly') errors.cadence = 'Choose how often you want emails';
+  if (!(CADENCES as readonly string[]).includes(v.cadence)) errors.cadence = 'Choose how often you want emails';
   if (v.country && !isCountryCode(v.country)) errors.country = 'Choose a country from the list';
   const formats = [...new Set(v.formats)];
   if (formats.some((f) => !(FORMATS as readonly string[]).includes(f))) errors.format = 'Choose formats from the list';

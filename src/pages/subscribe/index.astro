@@ -96,7 +96,10 @@ const topCountries = (await countryCounts()).sort((a, b) => b.upcoming - a.upcom
 
   <section aria-labelledby="email-sub" class="flow">
     <h2 id="email-sub">By email</h2>
-    <p>Get a weekly or monthly email of upcoming events. You can unsubscribe with one click.</p>
+    <p>
+      Get a weekly or monthly email of upcoming events, or hear when events are added or changed. You can unsubscribe
+      with one click.
+    </p>
     <p>
       <a class="button" href={`/subscribe/email${qs ? `?${qs}` : ''}`}>
         Get events by email

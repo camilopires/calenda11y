@@ -47,9 +47,46 @@ function missedDigest(cadence: 'weekly' | 'monthly'): Check {
   };
 }
 
+/** Today's daily alerts should have finished by 10:00 UTC; an instant round shouldn't run for over an hour. */
+async function stuckAlerts(): Promise<Problem | null> {
+  const subscribers = async (cadence: 'daily' | 'instant') =>
+    count('digest_subscribers', (q) =>
+      q.eq('cadence', cadence).not('confirmed_at', 'is', null).is('suppressed_at', null),
+    );
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  if (now.getUTCHours() >= 10 && (await subscribers('daily'))) {
+    const done = await count('alert_rounds', (q) =>
+      q.eq('cadence', 'daily').eq('round_date', today).eq('status', 'complete'),
+    );
+    if (!done)
+      return {
+        message: "Today's daily alert emails have not been sent yet.",
+        href: '/admin/subscribers',
+        linkText: 'See emails',
+      };
+  }
+  if (await subscribers('instant')) {
+    const stuck = await count('alert_rounds', (q) =>
+      q
+        .eq('cadence', 'instant')
+        .eq('status', 'running')
+        .lt('started_at', new Date(Date.now() - HOUR).toISOString()),
+    );
+    if (stuck)
+      return {
+        message: 'Alert emails sent as events change have been stuck for over an hour.',
+        href: '/admin/jobs',
+        linkText: 'See scheduled jobs',
+      };
+  }
+  return null;
+}
+
 const checks: Check[] = [
   missedDigest('weekly'),
   missedDigest('monthly'),
+  stuckAlerts,
   async () => {
     const n = await count('import_sources', (q) => q.eq('enabled', true).not('last_error', 'is', null));
     return n

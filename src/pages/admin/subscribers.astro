@@ -11,9 +11,11 @@ if (!guard.ok) return guard.response;
 
 const sendable = (cadence: string) => (q: CountQuery) =>
   q.eq('cadence', cadence).not('confirmed_at', 'is', null).is('suppressed_at', null);
-const [weekly, monthly, unconfirmed, suppressed] = await Promise.all([
+const [weekly, monthly, daily, instant, unconfirmed, suppressed] = await Promise.all([
   count('digest_subscribers', sendable('weekly')),
   count('digest_subscribers', sendable('monthly')),
+  count('digest_subscribers', sendable('daily')),
+  count('digest_subscribers', sendable('instant')),
   count('digest_subscribers', (q) => q.is('confirmed_at', null)),
   count('digest_subscribers', (q) => q.not('suppressed_at', 'is', null)),
 ]);
@@ -21,6 +23,7 @@ const runs = unwrap(
   await db()
     .from('digest_runs')
     .select('id,cadence,period_start,period_end,status,counts,started_at,finished_at')
+    .in('cadence', ['weekly', 'monthly'])
     .order('started_at', { ascending: false })
     .limit(20),
   'supabase',
@@ -34,18 +37,39 @@ const runs = unwrap(
   counts: Record<string, number>;
   started_at: string;
 }>;
+const rounds = unwrap(
+  await db()
+    .from('alert_rounds')
+    .select('id,cadence,round_date,status,counts,started_at')
+    .order('started_at', { ascending: false })
+    .limit(20),
+  'supabase',
+  'listing alert rounds',
+) as Array<{
+  id: string;
+  cadence: 'daily' | 'instant';
+  round_date: string | null;
+  status: string;
+  counts: Record<string, number>;
+  started_at: string;
+}>;
+const at = new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeStyle: 'short', timeZone: 'UTC' });
 ---
 
 <AdminLayout title="Subscribers" admin={guard.admin} current="subscribers">
   <div class="page-head">
     <h1>Subscribers</h1>
-    <p class="lede">People who get the email digest. Addresses aren't shown here.</p>
+    <p class="lede">People who get the email digest or alerts. Addresses aren't shown here.</p>
   </div>
   <dl class="details-list">
     <dt>Weekly</dt>
     <dd>{weekly}</dd>
     <dt>Monthly</dt>
     <dd>{monthly}</dd>
+    <dt>Daily alerts</dt>
+    <dd>{daily}</dd>
+    <dt>Alerts as they happen</dt>
+    <dd>{instant}</dd>
     <dt>Not confirmed yet</dt>
     <dd>{unconfirmed} (removed after 7 days)</dd>
     <dt>Stopped because emails bounced or were marked as spam</dt>
@@ -62,6 +86,22 @@ const runs = unwrap(
           {describePeriod({ cadence: r.cadence, start: r.period_start, end: r.period_end })}:{' '}
           {r.status === 'complete' ? 'finished' : 'in progress'}. {r.counts.queued ?? 0} emails queued,{' '}
           {r.counts.nothing_to_send ?? 0} people had no matching events.
+        </li>
+      ))}
+    </ul>
+  )}
+  <h2>Alerts sent</h2>
+  {rounds.length === 0 ? (
+    <p>No alerts have been sent yet.</p>
+  ) : (
+    <ul>
+      {rounds.map((r) => (
+        <li>
+          {r.cadence === 'daily'
+            ? `Daily, ${r.round_date}`
+            : `As they happen, ${at.format(new Date(r.started_at))} UTC`}
+          : {r.status === 'complete' ? 'finished' : 'in progress'}. {r.counts.queued ?? 0} emails queued,{' '}
+          {r.counts.nothing_to_send ?? 0} people had nothing new.
         </li>
       ))}
     </ul>

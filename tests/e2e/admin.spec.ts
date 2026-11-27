@@ -170,6 +170,7 @@ test.describe('admin', () => {
       '/admin/reports',
       '/admin/reports?show=resolved',
       '/admin/email-outbox',
+      '/admin/subscribers',
     ]) {
       await page.goto(path);
       await expectNoAxeViolations(page, path);
@@ -294,5 +295,21 @@ test.describe('admin', () => {
     expect(await res.text()).toContain('None of these can be published yet');
     const { data } = await service().from('events').select('status').eq('id', id).single();
     expect(data!.status).toBe('pending');
+  });
+  test('the subscribers page counts alert subscribers and lists alert rounds', async ({ page }) => {
+    await service()
+      .from('alert_rounds')
+      .insert({
+        cadence: 'daily',
+        round_date: '2033-02-03',
+        snapshot_seq: 0,
+        status: 'complete',
+        counts: { queued: 4 },
+      });
+    await signIn(page, await ensureAdmin(), '/admin/subscribers');
+    await expect(page.getByText('Daily alerts')).toBeVisible();
+    await expect(page.getByText('Alerts as they happen')).toBeVisible();
+    await expect(page.getByText(/Daily, 2033-02-03: finished\. 4 emails queued/)).toBeVisible();
+    await service().from('alert_rounds').delete().eq('round_date', '2033-02-03');
   });
 });

@@ -32,6 +32,12 @@ const countries = await allCountries();
   options={[
     { value: 'weekly', label: 'Weekly', hint: "On Mondays, with that week's events." },
     { value: 'monthly', label: 'Monthly', hint: "On the 1st, with that month's events." },
+    { value: 'daily', label: 'Daily', hint: 'Each morning, with events added or changed since the day before.' },
+    {
+      value: 'instant',
+      label: 'As they happen',
+      hint: 'Within about 10 minutes of an event being added or changed. At most one email every 10 minutes.',
+    },
   ]}
 />
 <Field

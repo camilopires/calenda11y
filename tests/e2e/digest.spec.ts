@@ -134,6 +134,37 @@ test.describe('email digest', () => {
     );
   });
 
+  test('alerts are a choice on the same sign-up and manage pages', async ({ page }) => {
+    const email = `alerts-${uniq()}@example.test`;
+    await page.goto('/subscribe/email?country=PT');
+    await page.getByLabel('Email address').fill(email);
+    await page.getByRole('radio', { name: /^As they happen/ }).check();
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.locator('.check-answers')).toContainText(
+      'an email as soon as events in Portugal are added or changed',
+    );
+    await expectNoAxeViolations(page, 'alert sign-up check');
+    await page.getByRole('button', { name: 'Sign up' }).click();
+    const confirmUrl = linkIn(sentEmails().find((m) => m.to === email)!.text, '/subscribe/confirm');
+    await page.goto(confirmUrl.pathname + confirmUrl.search);
+    await page.getByRole('button', { name: 'Confirm my emails' }).click();
+    const manage = new URL((await page.getByRole('link', { name: 'Change what you get' }).getAttribute('href'))!);
+    await page.goto(manage.pathname + manage.search);
+    await expect(page.getByRole('radio', { name: /^As they happen/ })).toBeChecked();
+    await page.getByRole('radio', { name: /^Daily/ }).check();
+    await page.getByRole('button', { name: 'Save my choices' }).click();
+    await expect(
+      page.getByText(/Saved. You'll now get a daily email of new and changed events in Portugal/),
+    ).toBeVisible();
+    const { data } = await service()
+      .from('digest_subscribers')
+      .select('cadence,countries,alert_cursor')
+      .eq('email', email)
+      .single();
+    expect(data).toMatchObject({ cadence: 'daily', countries: ['PT'] });
+    expect(data!.alert_cursor).not.toBeNull();
+  });
+
   test('GET on the unsubscribe link only shows a confirmation page', async ({ page }) => {
     const email = `getter-${uniq()}@example.test`;
     const { data } = await service()

@@ -24,10 +24,12 @@ import { ServiceError, unwrap, unwrapMaybe } from '../result.ts';
 import { LIMITS, allow } from '../security/ratelimit.ts';
 import { randomToken, sha256 } from '../security/tokens.ts';
 import { manageUrl, readSubscriberToken, type LinkKind } from './links.ts';
-import type { Cadence } from './period.ts';
+/** Weekly and monthly are digests; daily and instant are alerts about new and changed events. */
+export const CADENCES = ['weekly', 'monthly', 'daily', 'instant'] as const;
+export type SubscriptionCadence = (typeof CADENCES)[number];
 
 export interface Preferences {
-  cadence: Cadence;
+  cadence: SubscriptionCadence;
   countries: string[];
   formats: Format[];
   /** Any of these types; empty means every type. */
@@ -58,6 +60,8 @@ export function describePreferences(p: Preferences): string {
     (p.types.length ? p.types.map((t) => TYPE_PLURALS[t]).join(' or ') : 'events') +
     (p.topics.length ? ` ${aboutTopics(p.topics)}` : '');
   const cfp = p.include_cfp ? ', plus calls for speakers' : '';
+  if (p.cadence === 'daily') return `a daily email of new and changed ${formats}${kinds}${where}${cfp}`;
+  if (p.cadence === 'instant') return `an email as soon as ${formats}${kinds}${where} are added or changed${cfp}`;
   return `${p.cadence === 'weekly' ? 'a weekly' : 'a monthly'} email of ${formats}${kinds}${where}${cfp}`;
 }
 
