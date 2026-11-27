@@ -8,7 +8,9 @@ The site is built to meet [WCAG 2.2](https://www.w3.org/TR/WCAG22/) at level AAA
 
 - **Events list and month view.** Filter by country (or "online"), format, dates, price, access provisions and search. Filters are a plain HTML form, so they work without JavaScript and every result has a shareable address.
 - **Calendar integrations.** Every event has an `.ics` download plus Google Calendar and Outlook links. Anyone can subscribe to a feed for all events, one country, or any set of filters (`webcal://`), or follow an RSS feed.
-- **Email digest.** Weekly or monthly, with double opt-in and one-click unsubscribe (RFC 8058).
+- **Email digest and alerts.** Weekly or monthly digests, or alerts as events are added or changed (daily, or as they happen), with double opt-in and one-click unsubscribe (RFC 8058).
+- **Types, topics and calls for speakers.** Filter by type of event and topic, find events with an open call for speakers, and subscribe to a calendar of speaking deadlines.
+- **Near me.** Search within a distance of a town or postcode (miles in the UK and US, km elsewhere).
 - **Adding events.** A public form with a check-your-answers step, plus imports from iCalendar, RSS, Luma, Eventbrite and Meetup. A person checks everything before it's published.
 - **Sponsorship.** Monthly and yearly tiers and one-off donations through Stripe Checkout. Sponsors appear on the sponsor page once a person approves their profile.
 
@@ -111,6 +113,21 @@ Add sources in **Admin → Import sources**.
 - **Eventbrite** only reads organisations whose token you have.
 - **Meetup search** needs Meetup to grant API access (usually through Meetup Pro).
 - **The Luma API** needs Luma Plus.
+
+### Place search (near me)
+
+"Near me" uses OpenStreetMap's public Nominatim service by default. Its usage policy applies to you as the site owner: https://operations.osmfoundation.org/policies/nominatim/. In short:
+
+- at most 1 request a second in total, and 4 a minute from scheduled jobs (calenda11y spaces requests to stay within both);
+- results must be cached (calenda11y keeps them for 30 days), and the same search must not be sent repeatedly;
+- an identifying User-Agent (calenda11y sends `calenda11y/1.0 (+SITE_URL)`), attribution to OpenStreetMap, and no personal data;
+- no auto-complete;
+- you must be able to switch services without a software update.
+
+It's meant for moderate use. If the site gets busy, switch to your own Nominatim or a commercial service:
+
+- `GEOCODER_URL`: the search address of any Nominatim-compatible service.
+- `GEOCODER_OFF=1`: turns place search off ("Near" then says it isn't available). Events already placed still work.
 
 ## Licence
 

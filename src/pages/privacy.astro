@@ -33,6 +33,12 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       Forms use Cloudflare Turnstile to check you're a person. It doesn't ask you to solve puzzles. Cloudflare may
       process your IP address to do this. We store a scrambled version of IP addresses for up to a day to limit spam.
     </p>
+    <h2>If you search near a place</h2>
+    <p>
+      To find a place you type in "Near", we send just those words to OpenStreetMap's place search (Nominatim, run by
+      the OpenStreetMap Foundation). We don't send anything about you. We keep the answer for 30 days so the same search
+      isn't sent again, but not who searched. Event addresses are looked up the same way.
+    </p>
     <h2>Services we use</h2>
     <ul>
       <li>Vercel hosts the website.</li>
@@ -40,6 +46,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <li>Resend sends emails.</li>
       <li>Stripe takes sponsorship payments.</li>
       <li>Cloudflare Turnstile protects forms from spam.</li>
+      <li>OpenStreetMap's Nominatim finds places for "near me" searches.</li>
     </ul>
     <h2>Questions</h2>
     <p>
