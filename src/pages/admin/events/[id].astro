@@ -293,9 +293,13 @@ const STATUS: Record<string, string> = {
         <section aria-labelledby="changes" class="notice notice--important flow">
           <h2 id="changes">The source changed this event</h2>
           <p>The public page still shows the old details. Accept the changes to publish them.</p>
-          <div class="table-scroll">
+          {/* A scrollable region must be focusable so keyboard users can scroll it. */}
+          {/* eslint-disable-next-line astro/jsx-a11y/no-noninteractive-tabindex */}
+          <section class="table-scroll" aria-labelledby="changes-caption" tabindex="0">
             <table class="data-table">
-              <caption class="visually-hidden">Changes from the source</caption>
+              <caption id="changes-caption" class="visually-hidden">
+                Changes from the source
+              </caption>
               <thead>
                 <tr>
                   <th scope="col">Detail</th>
@@ -313,7 +317,7 @@ const STATUS: Record<string, string> = {
                 ))}
               </tbody>
             </table>
-          </div>
+          </section>
           <form method="post" class="button-row">
             <input type="hidden" name="version" value={version} />
             <button type="submit" name="step" value="accept-changes">

@@ -161,8 +161,7 @@ a:hover {
   outline: none;
 }
 
-:focus-visible,
-.focus-target:focus {
+:focus-visible {
   outline: var(--focus-width) solid var(--c-focus-ring);
   outline-offset: var(--focus-offset);
 }
@@ -220,6 +219,8 @@ a:focus-visible {
 }
 
 .wordmark {
+  flex-wrap: wrap;
+  row-gap: var(--space-1);
   font-size: var(--step-2);
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -232,6 +233,10 @@ a:focus-visible {
 
 .wordmark:visited {
   color: var(--c-text);
+}
+
+.wordmark__name {
+  overflow-wrap: anywhere;
 }
 
 .wordmark__mark {
@@ -357,6 +362,9 @@ button {
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;
+  /* Long labels wrap rather than push past a narrow screen at large text sizes. */
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
 }
 
 .button:visited {
@@ -380,6 +388,13 @@ button.button--secondary {
   color: var(--c-text);
 }
 
+/* A focused link always has readable text on the focus highlight, however
+   the rules above coloured it once visited. Same specificity as
+   `.site-nav a:visited` and later, so it wins; higher than `.button:visited`. */
+a:focus-visible:is(:link, :visited) {
+  color: var(--c-on-highlight);
+}
+
 .button--danger,
 button.button--danger {
   background: var(--c-error);
@@ -399,6 +414,9 @@ button.button--danger {
 fieldset {
   border: none;
   padding: 0;
+  /* Browsers give fieldsets a min-content minimum width, which pushes the
+     page sideways at narrow widths with large text. */
+  min-inline-size: 0;
 }
 
 legend {
@@ -476,10 +494,13 @@ input[type='radio'] {
 .choice label {
   font-weight: 400;
   padding-block: var(--space-2);
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
 
 .choices {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0 var(--space-5);
 }
 
@@ -603,11 +624,24 @@ input[type='radio'] {
   margin-block-start: var(--space-6);
 }
 
+/* The body sits beside the date while it has room for 12em of text, and
+   drops below it otherwise. Em-based, so it follows the site's own text
+   size and spacing settings, which media queries can't see. */
 .event {
-  display: grid;
-  grid-template-columns: 5.5rem 1fr;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-4);
   align-items: start;
+}
+
+.event > .date-block {
+  flex: 0 0 5.5rem;
+}
+
+.event__body {
+  flex: 1 1 12em;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
 
 .date-block {
@@ -890,6 +924,7 @@ details[open] > summary::before {
   list-style: none;
   padding: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
   max-inline-size: none;
 }

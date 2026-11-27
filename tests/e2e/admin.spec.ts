@@ -332,3 +332,44 @@ test.describe('admin', () => {
     expect(data!.geo_status).toBe('pending');
   });
 });
+
+test.describe('wide admin tables can be scrolled with the keyboard (2.1.1)', () => {
+  async function tabToAndScroll(page: Page, name: string) {
+    const region = page.getByRole('region', { name });
+    await expect(region).toBeVisible();
+    expect(await region.evaluate((el) => el.scrollWidth > el.clientWidth), `${name} overflows`).toBe(true);
+    await page.locator('body').focus();
+    let reached = false;
+    for (let i = 0; i < 120 && !reached; i++) {
+      await page.keyboard.press('Tab');
+      reached = await region.evaluate((el) => el === document.activeElement);
+    }
+    expect(reached, `Tab reaches ${name}`).toBe(true);
+    await page.keyboard.press('ArrowRight');
+    await expect.poll(() => region.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  }
+
+  test('the scheduled jobs table', async ({ page }) => {
+    const key = `import:e2e-${uniq()}`;
+    await service()
+      .from('jobs')
+      .insert({ key, kind: 'import', interval_seconds: 3600, last_error: 'The feed answered with HTTP 503 again' });
+    try {
+      await page.setViewportSize({ width: 320, height: 900 });
+      await signIn(page, await ensureAdmin(), '/admin/jobs');
+      await tabToAndScroll(page, 'Scheduled jobs');
+      await expectNoAxeViolations(page, '/admin/jobs at 320px');
+    } finally {
+      await service().from('jobs').delete().eq('key', key);
+    }
+  });
+
+  test('the changes from the source table', async ({ page }) => {
+    const id = await insertPendingEvent(`Changed ${uniq()}`, {
+      pending_changes: { title: 'A much longer title that the source now gives this event', city: 'Porto' },
+    });
+    await page.setViewportSize({ width: 320, height: 900 });
+    await signIn(page, await ensureAdmin(), `/admin/events/${id}`);
+    await tabToAndScroll(page, 'Changes from the source');
+  });
+});

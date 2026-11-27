@@ -71,31 +71,37 @@ const every = (s: number) =>
       <p>No jobs have run yet. Check that the scheduler is set up (see the README, "Scheduled jobs").</p>
     </div>
   ) : (
-    <div class="table-scroll">
-      <table class="data-table">
-        <caption class="visually-hidden">Scheduled jobs</caption>
-        <thead>
-          <tr>
-            <th scope="col">Job</th>
-            <th scope="col">Runs every</th>
-            <th scope="col">Last worked</th>
-            <th scope="col">Next run</th>
-            <th scope="col">Problem</th>
-          </tr>
-        </thead>
-        <tbody>
-          {jobs.map((j) => (
+    <>
+      {/* A scrollable region must be focusable so keyboard users can scroll it. */}
+      {/* eslint-disable-next-line astro/jsx-a11y/no-noninteractive-tabindex */}
+      <section class="table-scroll" aria-labelledby="jobs-caption" tabindex="0">
+        <table class="data-table">
+          <caption id="jobs-caption" class="visually-hidden">
+            Scheduled jobs
+          </caption>
+          <thead>
             <tr>
-              <th scope="row">{label(j.key)}</th>
-              <td>{every(j.interval_seconds)}</td>
-              <td>{fmt(j.last_success_at)}</td>
-              <td>{j.lease_until && Date.parse(j.lease_until) > Date.now() ? 'Running now' : fmt(j.run_after)}</td>
-              <td>{j.last_error ?? 'None'}</td>
+              <th scope="col">Job</th>
+              <th scope="col">Runs every</th>
+              <th scope="col">Last worked</th>
+              <th scope="col">Next run</th>
+              <th scope="col">Problem</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {jobs.map((j) => (
+              <tr>
+                <th scope="row">{label(j.key)}</th>
+                <td>{every(j.interval_seconds)}</td>
+                <td>{fmt(j.last_success_at)}</td>
+                <td>{j.lease_until && Date.parse(j.lease_until) > Date.now() ? 'Running now' : fmt(j.run_after)}</td>
+                <td>{j.last_error ?? 'None'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    </>
   )}
   <h2>Recent runs</h2>
   {runs.length === 0 ? (
