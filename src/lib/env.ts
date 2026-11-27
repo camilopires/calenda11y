@@ -3,7 +3,9 @@ import { z } from 'zod';
 /**
  * Every environment variable the app reads, checked in one place.
  *
- * In production every variable is required. In development and test, local
+ * In production every variable is required, and every Vercel deploy
+ * (previews included) counts as production, so a deploy can never fall back
+ * to the public development secrets or the fake services. In development and test, local
  * defaults are used where there's a sensible local value, and third-party
  * keys are optional (fake services stand in for them).
  *
@@ -86,10 +88,17 @@ type Source = Record<string, string | undefined>;
 export function parseEnv(source: Source): Env {
   // Treat empty strings as unset so a blank line in .env doesn't count as a value.
   const cleaned: Source = Object.fromEntries(Object.entries(source).filter(([, v]) => v !== undefined && v !== ''));
-  const schema = cleaned.APP_ENV === 'production' ? productionSchema : localSchema;
+  const onVercel = cleaned.VERCEL === '1';
+  const schema = onVercel || cleaned.APP_ENV === 'production' ? productionSchema : localSchema;
   const result = schema.safeParse(cleaned);
   if (!result.success) {
-    throw new EnvError(result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`));
+    throw new EnvError(
+      result.error.issues.map((i) =>
+        onVercel && i.path[0] === 'APP_ENV'
+          ? 'APP_ENV: must be "production" on Vercel (previews too), so a deploy never uses development settings'
+          : `${i.path.join('.')}: ${i.message}`,
+      ),
+    );
   }
   return result.data;
 }

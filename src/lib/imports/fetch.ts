@@ -3,7 +3,8 @@
  * point at (or redirect to) something internal, so every request:
  *  - must be https, on the default port;
  *  - resolves DNS itself and refuses private, loopback, link-local, CGNAT,
- *    multicast and cloud-metadata addresses (IPv4 and IPv6), then connects to
+ *    multicast and cloud-metadata addresses (IPv4 and IPv6, including IPv6
+ *    forms that carry an IPv4 address), then connects to
  *    the address it checked, so DNS can't change in between (rebinding);
  *  - follows at most 3 redirects, checking each one the same way;
  *  - times out after 20 seconds and stops reading after 5 MB.
@@ -47,6 +48,10 @@ for (const [net, prefix] of [
   ['::1', 128],
   // IPv4-mapped addresses (::ffff:a.b.c.d) are checked as IPv4 in isBlockedAddress.
   ['64:ff9b::', 96],
+  // Local NAT64, 6to4 and Teredo: each can carry or reach an IPv4 address.
+  ['64:ff9b:1::', 48],
+  ['2002::', 16],
+  ['2001::', 32],
   ['100::', 64],
   ['2001:db8::', 32],
   ['fc00::', 7],

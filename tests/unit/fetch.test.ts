@@ -16,6 +16,10 @@ describe('isBlockedAddress', () => {
     'fd00::1',
     '::ffff:10.0.0.1',
     '::ffff:127.0.0.1',
+    // 6to4 and Teredo carry an IPv4 address inside; local NAT64 reaches IPv4 networks.
+    '2002:0a00:0001::1',
+    '2001:0:4136:e378:8000:63bf:3fff:fdd2',
+    '64:ff9b:1::a00:1',
     'not-an-ip',
   ])('blocks %s', (ip) => {
     expect(isBlockedAddress(ip)).toBe(true);
@@ -34,6 +38,8 @@ describe('checkUrl', () => {
     ['https://example.org:8443/', /port/],
     ['https://127.0.0.1/', /private/],
     ['https://[::1]/', /private/],
+    ['https://[2002:a00:1::1]/', /private/],
+    ['https://[2001:0:4136:e378:8000:63bf:3fff:fdd2]/', /private/],
     ['https://localhost/', /private/],
     ['https://metadata.internal/', /private/],
     ['not a url', /valid/],
@@ -72,6 +78,11 @@ describe('safeFetch', () => {
 
   it('refuses a redirect to a private address', async () => {
     const fetcher = (async () => response(302, '', { location: 'https://169.254.169.254/latest/meta-data' })) as never;
+    await expect(safeFetch('https://example.org/cal.ics', { fetcher })).rejects.toThrow(/private network/);
+  });
+
+  it('refuses a redirect to a 6to4 address', async () => {
+    const fetcher = (async () => response(302, '', { location: 'https://[2002:a9fe:a9fe::1]/x' })) as never;
     await expect(safeFetch('https://example.org/cal.ics', { fetcher })).rejects.toThrow(/private network/);
   });
 

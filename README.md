@@ -91,7 +91,7 @@ Verify the sending domain. DKIM must sign the `List-Unsubscribe` and `List-Unsub
 
 ### 4. Vercel
 
-Use **Vercel Pro**: the free Hobby plan is for non-commercial use only, and this site takes sponsorship payments. Import the repository, then set the environment variables from [`.env.example`](.env.example), with `APP_ENV=production`. Every variable is required in production, and the build fails if one is missing.
+Use **Vercel Pro**: the free Hobby plan is for non-commercial use only, and this site takes sponsorship payments. Import the repository, then set the environment variables from [`.env.example`](.env.example), with `APP_ENV=production`. Every variable is required in production, and the build fails if one is missing. On Vercel every deploy counts as production, previews included, so give preview deploys their own complete set of values (Stripe test keys are fine).
 
 | Variable                                                         | Where it comes from                                   |
 | ---------------------------------------------------------------- | ----------------------------------------------------- |
