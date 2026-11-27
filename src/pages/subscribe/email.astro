@@ -31,6 +31,7 @@ let values: PreferenceValues = {
   online: initialCountry === 'ONLINE',
   formats: q.getAll('format'),
   types: q.getAll('type'),
+  topics: q.getAll('topic'),
   // Coming from an "Open for speakers" search ticks the calls-for-speakers box.
   include_cfp: q.get('cfp') === 'open',
 };
@@ -135,7 +136,7 @@ if (Astro.request.method === 'POST') {
       <ErrorSummary
         errors={errors}
         general={general}
-        targets={{ cadence: 'f-cadence', format: 'f-format', type: 'f-type' }}
+        targets={{ cadence: 'f-cadence', format: 'f-format', type: 'f-type', topic: 'f-topic' }}
       />
       <form method="post" class="flow" novalidate>
         <input type="hidden" name="step" value="check" />

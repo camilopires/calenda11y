@@ -1,6 +1,14 @@
 import type { FieldErrors } from '../forms/errors.ts';
 import { isEmail } from '../forms/event.ts';
-import { EVENT_TYPES, FORMATS, type EventType, type Format } from '../events/model.ts';
+import {
+  EVENT_TOPICS,
+  EVENT_TYPES,
+  FORMATS,
+  TOPIC_SLUGS,
+  topicFromSlug,
+  type EventType,
+  type Format,
+} from '../events/model.ts';
 import { isCountryCode } from '../events/predicates.ts';
 import type { Preferences } from './subscribers.ts';
 
@@ -10,6 +18,8 @@ export interface PreferenceValues {
   online: boolean;
   formats: string[];
   types: string[];
+  /** URL names (assistive-technology), as on the event list. */
+  topics: string[];
   include_cfp: boolean;
 }
 
@@ -20,6 +30,7 @@ export function readPreferences(form: FormData): PreferenceValues {
     online: form.get('online') === 'on',
     formats: form.getAll('format').map(String),
     types: form.getAll('type').map(String),
+    topics: form.getAll('topic').map(String),
     include_cfp: form.get('include_cfp') === 'on',
   };
 }
@@ -31,6 +42,7 @@ export function preferencesToValues(p: Preferences): PreferenceValues {
     online: p.countries.includes('online'),
     formats: p.formats,
     types: p.types,
+    topics: p.topics.map((t) => TOPIC_SLUGS[t]),
     include_cfp: p.include_cfp,
   };
 }
@@ -45,6 +57,9 @@ export function validatePreferences(v: PreferenceValues): PreferenceValidation {
   if (formats.some((f) => !(FORMATS as readonly string[]).includes(f))) errors.format = 'Choose formats from the list';
   if (v.types.some((t) => !(EVENT_TYPES as readonly string[]).includes(t))) errors.type = 'Choose types from the list';
   const types: EventType[] = EVENT_TYPES.filter((t) => v.types.includes(t));
+  const chosenTopics = v.topics.map(topicFromSlug);
+  if (chosenTopics.includes(null)) errors.topic = 'Choose topics from the list';
+  const topics = EVENT_TOPICS.filter((t) => chosenTopics.includes(t));
   if (Object.keys(errors).length) return { ok: false, errors };
   return {
     ok: true,
@@ -53,6 +68,7 @@ export function validatePreferences(v: PreferenceValues): PreferenceValidation {
       countries: [...(v.country ? [v.country] : []), ...(v.online ? ['online'] : [])],
       formats: formats as Format[],
       types,
+      topics,
       include_cfp: v.include_cfp,
     },
   };

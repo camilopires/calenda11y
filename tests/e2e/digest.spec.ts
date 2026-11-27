@@ -116,6 +116,19 @@ test.describe('email digest', () => {
     await expectNoAxeViolations(page, 'sign-up check with calls');
   });
 
+  test('topics chosen on the list carry into the email sign-up', async ({ page }) => {
+    await page.goto('/?topic=content');
+    await page.getByRole('link', { name: 'Subscribe to these events' }).click();
+    await page.locator('a.button', { hasText: /email/i }).click();
+    await expect(page.getByRole('checkbox', { name: 'Content and plain language', exact: true })).toBeChecked();
+    await page.getByLabel('Email address').fill(`topical-${uniq()}@example.test`);
+    await page.getByRole('radio', { name: /^Weekly/ }).check();
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.locator('.check-answers')).toContainText(
+      'a weekly email of events about content and plain language',
+    );
+  });
+
   test('GET on the unsubscribe link only shows a confirmation page', async ({ page }) => {
     const email = `getter-${uniq()}@example.test`;
     const { data } = await service()

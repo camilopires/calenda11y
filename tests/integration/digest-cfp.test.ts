@@ -51,9 +51,64 @@ afterAll(async () => {
   await db.from('digest_runs').delete().eq('period_start', '2033-06-01');
 });
 
+describe('topics in the digest', () => {
+  it('two subscribers who differ only in topics each get their own events and calls', async () => {
+    const legal = `law-${tag}@example.test`;
+    const career = `careers-${tag}@example.test`;
+    await db.from('events').insert([
+      event('law-event', {
+        country_code: 'FO',
+        city: 'Torshavn',
+        topics: ['law'],
+        starts_at: '2033-06-15T10:00:00Z',
+        ends_at: '2033-06-15T12:00:00Z',
+        cfp_url: null,
+      }),
+      event('careers-event', {
+        country_code: 'FO',
+        city: 'Torshavn',
+        topics: ['careers'],
+        starts_at: '2033-06-16T10:00:00Z',
+        ends_at: '2033-06-16T12:00:00Z',
+        cfp_url: null,
+      }),
+      event('careers-call', {
+        country_code: 'FO',
+        city: 'Torshavn',
+        topics: ['careers'],
+        cfp_closes_on: '2033-06-20',
+      }),
+    ]);
+    for (const [email, topics] of [
+      [legal, ['law']],
+      [career, ['careers']],
+    ] as const) {
+      await db.from('digest_subscribers').insert({
+        email,
+        cadence: 'monthly',
+        countries: ['FO'],
+        topics,
+        include_cfp: true,
+        confirmed_at: new Date().toISOString(),
+      });
+    }
+    await db.from('digest_runs').delete().eq('period_start', '2033-06-01');
+    await runDigest('monthly', Date.now() + 30_000, new Date('2033-06-01T09:00:00Z'));
+    const body = async (to: string) =>
+      (await db.from('email_outbox').select('text_body').eq('to_email', to).single()).data!.text_body as string;
+    const l = await body(legal);
+    expect(l).toContain(`${tag} law-event`);
+    expect(l).not.toContain(`${tag} careers`);
+    const c = await body(career);
+    expect(c).toContain(`${tag} careers-event`);
+    expect(c).toContain(`${tag} careers-call`);
+    expect(c).not.toContain(`${tag} law-event`);
+  });
+});
+
 describe('calls for speakers in the digest', () => {
   it('picks open calls closing in the period or the month after, by closing time', async () => {
-    const calls = await cfpFor({ countries: ['IS'], formats: [], types: ['conference'] }, PERIOD, NOW);
+    const calls = await cfpFor({ countries: ['IS'], formats: [], types: ['conference'], topics: [] }, PERIOD, NOW);
     // Honolulu's last day (5 June) is "yesterday" in UTC, but it's still open there.
     expect(calls.map((e) => e.slug)).toEqual([`${tag}-honolulu`, `${tag}-no-date`, `${tag}-soon`]);
   });

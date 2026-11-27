@@ -11,7 +11,15 @@ import { db } from '../db.ts';
 import { env } from '../env.ts';
 import { queued, sendNow } from '../email/outbox.ts';
 import { confirmSubscription, manageSubscription } from '../email/templates.ts';
-import { countryName, FORMAT_LABELS, TYPE_PLURALS, type EventType, type Format } from '../events/model.ts';
+import {
+  countryName,
+  FORMAT_LABELS,
+  TYPE_PLURALS,
+  type EventTopic,
+  type EventType,
+  type Format,
+} from '../events/model.ts';
+import { aboutTopics } from '../events/predicates.ts';
 import { ServiceError, unwrap, unwrapMaybe } from '../result.ts';
 import { LIMITS, allow } from '../security/ratelimit.ts';
 import { randomToken, sha256 } from '../security/tokens.ts';
@@ -24,6 +32,8 @@ export interface Preferences {
   formats: Format[];
   /** Any of these types; empty means every type. */
   types: EventType[];
+  /** About any of these topics; empty means every topic. */
+  topics: EventTopic[];
   /** Also send calls for speakers closing soon. */
   include_cfp: boolean;
 }
@@ -36,7 +46,7 @@ export interface Subscriber extends Preferences {
   token_version: number;
 }
 
-const COLS = 'id,email,cadence,countries,formats,types,include_cfp,confirmed_at,suppressed_at,token_version';
+const COLS = 'id,email,cadence,countries,formats,types,topics,include_cfp,confirmed_at,suppressed_at,token_version';
 const CONFIRM_DAYS = 7;
 
 export function describePreferences(p: Preferences): string {
@@ -44,7 +54,9 @@ export function describePreferences(p: Preferences): string {
   const where = p.countries.length
     ? ` ${p.countries.map((c) => (c === 'online' ? 'you can join online' : `in ${countryName(c)}`)).join(', or ')}`
     : '';
-  const kinds = p.types.length ? p.types.map((t) => TYPE_PLURALS[t]).join(' or ') : 'events';
+  const kinds =
+    (p.types.length ? p.types.map((t) => TYPE_PLURALS[t]).join(' or ') : 'events') +
+    (p.topics.length ? ` ${aboutTopics(p.topics)}` : '');
   const cfp = p.include_cfp ? ', plus calls for speakers' : '';
   return `${p.cadence === 'weekly' ? 'a weekly' : 'a monthly'} email of ${formats}${kinds}${where}${cfp}`;
 }

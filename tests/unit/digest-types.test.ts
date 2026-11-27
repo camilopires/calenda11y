@@ -20,6 +20,7 @@ describe('digest preferences: types', () => {
       online: false,
       formats: [],
       types: ['party'],
+      topics: [],
       include_cfp: false,
     });
     expect(!r.ok && r.errors.type).toBe('Choose types from the list');
@@ -31,6 +32,7 @@ describe('digest preferences: types', () => {
       countries: [],
       formats: [],
       types: ['talk'],
+      topics: [],
       include_cfp: false,
     });
     expect(v.types).toEqual(['talk']);
@@ -43,6 +45,7 @@ describe('digest preferences: types', () => {
         countries: ['PT'],
         formats: [],
         types: ['conference', 'workshop'],
+        topics: [],
         include_cfp: false,
       }),
     ).toBe('a weekly email of conferences or workshops in Portugal');
@@ -52,6 +55,7 @@ describe('digest preferences: types', () => {
         countries: [],
         formats: ['online'],
         types: ['talk'],
+        topics: [],
         include_cfp: false,
       }),
     ).toBe('a monthly email of online talks and webinars');
@@ -59,7 +63,7 @@ describe('digest preferences: types', () => {
 
   it('links to the same types on the site', () => {
     const url = digestListUrl(
-      { countries: [], formats: [], types: ['meetup'] },
+      { countries: [], formats: [], types: ['meetup'], topics: [] },
       { start: '2031-03-03', end: '2031-03-09' },
       '2031-03-03',
     );

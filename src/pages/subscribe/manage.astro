@@ -54,7 +54,10 @@ const action = `/subscribe/manage?token=${encodeURIComponent(token)}`;
           <p>Saved. You'll now get {describePreferences(sub)}. You can change this again at any time.</p>
         </div>
       )}
-      <ErrorSummary errors={errors} targets={{ cadence: 'f-cadence', format: 'f-format' }} />
+      <ErrorSummary
+        errors={errors}
+        targets={{ cadence: 'f-cadence', format: 'f-format', type: 'f-type', topic: 'f-topic' }}
+      />
       <form method="post" action={action} class="flow" novalidate>
         <PreferenceFields values={values} errors={errors} />
         <div class="button-row">

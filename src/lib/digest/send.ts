@@ -10,7 +10,7 @@ import { queued } from '../email/outbox.ts';
 import { digestEmail, type CfpItem, type DigestItem } from '../email/templates.ts';
 import { cfpDeadline } from '../events/cfp.ts';
 import { addDays, describeWhen, formatLongDate, todayUtc } from '../events/dates.ts';
-import { PUBLIC_EVENT_COLUMNS, countryName, type PublicEvent } from '../events/model.ts';
+import { PUBLIC_EVENT_COLUMNS, TOPIC_SLUGS, countryName, type PublicEvent } from '../events/model.ts';
 import { unwrap, unwrapMaybe } from '../result.ts';
 import { manageUrl, unsubscribeHeaders, unsubscribeUrl } from './links.ts';
 import { currentPeriod, describePeriod, isDue, type Cadence, type Period } from './period.ts';
@@ -34,7 +34,7 @@ export interface DigestSelection {
   total: number;
 }
 
-type Prefs = Pick<Subscriber, 'countries' | 'formats' | 'types'>;
+type Prefs = Pick<Subscriber, 'countries' | 'formats' | 'types' | 'topics'>;
 
 interface PrefQuery<Q> {
   in(column: string, values: readonly unknown[]): Q;
@@ -47,6 +47,7 @@ function applyPrefs<Q extends PrefQuery<Q>>(query: Q, prefs: Prefs): Q {
   let q = query;
   if (prefs.formats.length) q = q.in('format', prefs.formats);
   if (prefs.types.length) q = q.overlaps('types', prefs.types);
+  if (prefs.topics.length) q = q.overlaps('topics', prefs.topics);
   const countries = prefs.countries.filter((c) => c !== 'online');
   const online = prefs.countries.includes('online');
   if (countries.length && online) q = q.or(`country_code.in.(${countries.join(',')}),format.in.(online,hybrid)`);
@@ -108,11 +109,7 @@ export async function eventsFor(
 }
 
 /** A link to the same events on the site, as close as the list's filters allow. */
-export function digestListUrl(
-  prefs: Pick<Subscriber, 'countries' | 'formats' | 'types'>,
-  period: Pick<Period, 'start' | 'end'>,
-  today: string,
-): string {
+export function digestListUrl(prefs: Prefs, period: Pick<Period, 'start' | 'end'>, today: string): string {
   const p = new URLSearchParams();
   const countries = prefs.countries.filter((c) => c !== 'online');
   const online = prefs.countries.includes('online');
@@ -121,6 +118,7 @@ export function digestListUrl(
   else if (!countries.length && online) p.set('country', 'online');
   for (const f of prefs.formats) p.append('format', f);
   for (const t of prefs.types) p.append('type', t);
+  for (const t of prefs.topics) p.append('topic', TOPIC_SLUGS[t]);
   p.set('from', period.start > today ? period.start : today);
   p.set('to', period.end);
   return new URL(`/?${p}`, env().SITE_URL).href;
@@ -214,7 +212,7 @@ async function processRun(
   while (Date.now() < deadline) {
     let q = db()
       .from('digest_subscribers')
-      .select('id,email,cadence,countries,formats,types,include_cfp,confirmed_at,suppressed_at,token_version')
+      .select('id,email,cadence,countries,formats,types,topics,include_cfp,confirmed_at,suppressed_at,token_version')
       .eq('cadence', cadence)
       .not('confirmed_at', 'is', null)
       .is('suppressed_at', null)
@@ -239,7 +237,12 @@ async function processRun(
     for (const s of subs) {
       // Check the time between subscribers, so a slow batch can't run past the budget.
       if (Date.now() >= deadline) break;
-      const key = JSON.stringify([s.countries.slice().sort(), s.formats.slice().sort(), s.types.slice().sort()]);
+      const key = JSON.stringify([
+        s.countries.slice().sort(),
+        s.formats.slice().sort(),
+        s.types.slice().sort(),
+        s.topics.slice().sort(),
+      ]);
       if (!cache.has(key)) cache.set(key, await eventsFor(s, period, now));
       const { events, total } = cache.get(key)!;
       if (s.include_cfp && !cfpCache.has(key)) cfpCache.set(key, await cfpFor(s, period, now));
