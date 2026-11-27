@@ -31,6 +31,8 @@ let values: PreferenceValues = {
   online: initialCountry === 'ONLINE',
   formats: q.getAll('format'),
   types: q.getAll('type'),
+  // Coming from an "Open for speakers" search ticks the calls-for-speakers box.
+  include_cfp: q.get('cfp') === 'open',
 };
 let email = '';
 let errors: Record<string, string> = {};

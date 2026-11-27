@@ -113,6 +113,19 @@ export interface DigestItem {
   when: string;
   where: string;
   summary: string;
+  /** "Call for speakers: apply by ...", when the event has one. */
+  cfp?: string | null;
+}
+
+/** A call for speakers in the digest's "closing soon" section. */
+export interface CfpItem {
+  title: string;
+  /** Where to apply. */
+  url: string;
+  /** "Apply by Monday 8 March 2027" or "Apply before the event starts". */
+  deadline: string;
+  /** When and where the event is. */
+  event: string;
 }
 
 export function digestEmail(
@@ -120,24 +133,42 @@ export function digestEmail(
   items: DigestItem[],
   manageLink: string,
   unsubscribeLink: string,
-  options: { total?: number; listUrl?: string } = {},
+  options: { total?: number; listUrl?: string; cfp?: CfpItem[] } = {},
 ): EmailContent {
   const total = options.total ?? items.length;
   const more = total > items.length;
+  const calls = options.cfp ?? [];
+  const intro = !items.length
+    ? 'No events in this period match your choices, but these calls for speakers are open.'
+    : more
+      ? `${total} events match your choices. Here are the first ${items.length}.`
+      : `${items.length} ${items.length === 1 ? 'event' : 'events'} for you.`;
   return renderEmail(
     heading,
     heading,
     [
-      {
-        type: 'p',
-        text: more
-          ? `${total} events match your choices. Here are the first ${items.length}.`
-          : `${items.length} ${items.length === 1 ? 'event' : 'events'} for you.`,
-      },
-      {
-        type: 'list',
-        items: items.map((i) => ({ text: i.title, href: i.url, detail: `${i.when}. ${i.where}. ${i.summary}` })),
-      },
+      { type: 'p', text: intro },
+      ...(items.length
+        ? [
+            {
+              type: 'list' as const,
+              items: items.map((i) => ({
+                text: i.title,
+                href: i.url,
+                detail: `${i.when}. ${i.where}. ${i.summary}${i.cfp ? ` ${i.cfp}.` : ''}`,
+              })),
+            },
+          ]
+        : []),
+      ...(calls.length
+        ? [
+            { type: 'h2' as const, text: 'Calls for speakers closing soon' },
+            {
+              type: 'list' as const,
+              items: calls.map((c) => ({ text: `${c.deadline}: ${c.title}`, href: c.url, detail: `${c.event}.` })),
+            },
+          ]
+        : []),
       more && options.listUrl
         ? { type: 'link', text: `See all ${total} events on calenda11y`, href: options.listUrl }
         : { type: 'link', text: 'See all events on calenda11y', href: options.listUrl ?? url('/') },

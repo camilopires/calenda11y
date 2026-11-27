@@ -7,8 +7,9 @@
 import { db } from '../db.ts';
 import { env } from '../env.ts';
 import { queued } from '../email/outbox.ts';
-import { digestEmail, type DigestItem } from '../email/templates.ts';
-import { describeWhen, todayUtc } from '../events/dates.ts';
+import { digestEmail, type CfpItem, type DigestItem } from '../email/templates.ts';
+import { cfpDeadline } from '../events/cfp.ts';
+import { addDays, describeWhen, formatLongDate, todayUtc } from '../events/dates.ts';
 import { PUBLIC_EVENT_COLUMNS, countryName, type PublicEvent } from '../events/model.ts';
 import { unwrap, unwrapMaybe } from '../result.ts';
 import { manageUrl, unsubscribeHeaders, unsubscribeUrl } from './links.ts';
@@ -33,20 +34,17 @@ export interface DigestSelection {
   total: number;
 }
 
-/** Events in the period that a subscriber's choices match. */
-export async function eventsFor(
-  prefs: Pick<Subscriber, 'countries' | 'formats' | 'types'>,
-  period: Pick<Period, 'start' | 'end'>,
-  now: Date,
-): Promise<DigestSelection> {
-  const today = todayUtc(now);
-  let q = db()
-    .from('public_events')
-    .select(PUBLIC_EVENT_COLUMNS, { count: 'exact' })
-    .eq('status', 'approved')
-    .gt('end_instant', now.toISOString())
-    .gte('local_end_date', period.start > today ? period.start : today)
-    .lte('local_start_date', period.end);
+type Prefs = Pick<Subscriber, 'countries' | 'formats' | 'types'>;
+
+interface PrefQuery<Q> {
+  in(column: string, values: readonly unknown[]): Q;
+  or(filters: string): Q;
+  overlaps(column: string, values: readonly unknown[]): Q;
+}
+
+/** A subscriber's country, format and type choices, as conditions on public_events. */
+function applyPrefs<Q extends PrefQuery<Q>>(query: Q, prefs: Prefs): Q {
+  let q = query;
   if (prefs.formats.length) q = q.in('format', prefs.formats);
   if (prefs.types.length) q = q.overlaps('types', prefs.types);
   const countries = prefs.countries.filter((c) => c !== 'online');
@@ -54,7 +52,57 @@ export async function eventsFor(
   if (countries.length && online) q = q.or(`country_code.in.(${countries.join(',')}),format.in.(online,hybrid)`);
   else if (countries.length) q = q.in('country_code', countries);
   else if (online) q = q.in('format', ['online', 'hybrid']);
-  const result = await q.order('start_instant').order('id').limit(MAX_EVENTS_PER_EMAIL);
+  return q;
+}
+
+/** How many calls for speakers the "closing soon" section lists, at most. */
+const MAX_CALLS_PER_EMAIL = 20;
+/** Calls closing this long after the period still count as "closing soon". */
+const CFP_LOOKAHEAD_DAYS = 31;
+
+/**
+ * Open calls for speakers closing between now and a month after the period,
+ * soonest first. Chosen by the exact closing instant, so calls with no date
+ * (they close when the event starts) and calls in time zones behind UTC are
+ * included correctly.
+ */
+export async function cfpFor(prefs: Prefs, period: Pick<Period, 'start' | 'end'>, now: Date): Promise<PublicEvent[]> {
+  const until = `${addDays(period.end, CFP_LOOKAHEAD_DAYS)}T00:00:00Z`;
+  const q = db()
+    .from('public_events')
+    .select(PUBLIC_EVENT_COLUMNS)
+    .eq('status', 'approved')
+    .gt('cfp_closes_at', now.toISOString())
+    .lt('cfp_closes_at', until);
+  const result = await applyPrefs(q, prefs).order('cfp_closes_at').order('id').limit(MAX_CALLS_PER_EMAIL);
+  return unwrap(result, 'supabase', 'selecting calls for speakers') as unknown as PublicEvent[];
+}
+
+function cfpItem(e: PublicEvent): CfpItem {
+  return {
+    title: e.title,
+    url: e.cfp_url!,
+    deadline:
+      e.cfp_capped || !e.cfp_last_day ? 'Apply before the event starts' : `Apply by ${formatLongDate(e.cfp_last_day)}`,
+    event: `${formatLongDate(e.local_start_date)}, ${placeOf(e)}`,
+  };
+}
+
+/** Events in the period that a subscriber's choices match. */
+export async function eventsFor(
+  prefs: Prefs,
+  period: Pick<Period, 'start' | 'end'>,
+  now: Date,
+): Promise<DigestSelection> {
+  const today = todayUtc(now);
+  const q = db()
+    .from('public_events')
+    .select(PUBLIC_EVENT_COLUMNS, { count: 'exact' })
+    .eq('status', 'approved')
+    .gt('end_instant', now.toISOString())
+    .gte('local_end_date', period.start > today ? period.start : today)
+    .lte('local_start_date', period.end);
+  const result = await applyPrefs(q, prefs).order('start_instant').order('id').limit(MAX_EVENTS_PER_EMAIL);
   const events = unwrap(result, 'supabase', 'selecting digest events') as unknown as PublicEvent[];
   return { events, total: result.count ?? events.length };
 }
@@ -78,17 +126,21 @@ export function digestListUrl(
   return new URL(`/?${p}`, env().SITE_URL).href;
 }
 
+function placeOf(e: PublicEvent): string {
+  return e.format === 'online'
+    ? 'Online'
+    : [e.city, e.country_code ? countryName(e.country_code) : null].filter(Boolean).join(', ');
+}
+
 function item(e: PublicEvent): DigestItem {
   const w = describeWhen(e);
   return {
     title: e.title,
     url: new URL(`/events/${e.slug}`, env().SITE_URL).href,
     when: `${w.date}, ${w.time}`,
-    where:
-      e.format === 'online'
-        ? 'Online'
-        : [e.city, e.country_code ? countryName(e.country_code) : null].filter(Boolean).join(', '),
+    where: placeOf(e),
     summary: e.summary,
+    cfp: cfpDeadline(e),
   };
 }
 
@@ -156,12 +208,13 @@ async function processRun(
   const heading = `Accessibility events: ${describePeriod({ cadence, ...period })}`;
   const today = todayUtc(now);
   const cache = new Map<string, DigestSelection>();
+  const cfpCache = new Map<string, PublicEvent[]>();
   let cursor = run.cursor;
 
   while (Date.now() < deadline) {
     let q = db()
       .from('digest_subscribers')
-      .select('id,email,cadence,countries,formats,types,confirmed_at,suppressed_at,token_version')
+      .select('id,email,cadence,countries,formats,types,include_cfp,confirmed_at,suppressed_at,token_version')
       .eq('cadence', cadence)
       .not('confirmed_at', 'is', null)
       .is('suppressed_at', null)
@@ -189,8 +242,10 @@ async function processRun(
       const key = JSON.stringify([s.countries.slice().sort(), s.formats.slice().sort(), s.types.slice().sort()]);
       if (!cache.has(key)) cache.set(key, await eventsFor(s, period, now));
       const { events, total } = cache.get(key)!;
+      if (s.include_cfp && !cfpCache.has(key)) cfpCache.set(key, await cfpFor(s, period, now));
+      const calls = s.include_cfp ? cfpCache.get(key)! : [];
       last = s.id;
-      if (!events.length) {
+      if (!events.length && !calls.length) {
         counts.nothing_to_send = (counts.nothing_to_send ?? 0) + 1;
         continue;
       }
@@ -207,6 +262,7 @@ async function processRun(
             {
               total,
               listUrl: digestListUrl(s, period, today),
+              cfp: calls.map(cfpItem),
             },
           ),
           unsubscribeHeaders(s.id, s.token_version),

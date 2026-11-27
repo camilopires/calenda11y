@@ -14,22 +14,47 @@ describe('digest preferences: types', () => {
   });
 
   it('refuses unknown types', () => {
-    const r = validatePreferences({ cadence: 'weekly', country: '', online: false, formats: [], types: ['party'] });
+    const r = validatePreferences({
+      cadence: 'weekly',
+      country: '',
+      online: false,
+      formats: [],
+      types: ['party'],
+      include_cfp: false,
+    });
     expect(!r.ok && r.errors.type).toBe('Choose types from the list');
   });
 
   it('puts saved types back on the form, so changing something else keeps them', () => {
-    const v = preferencesToValues({ cadence: 'monthly', countries: [], formats: [], types: ['talk'] });
+    const v = preferencesToValues({
+      cadence: 'monthly',
+      countries: [],
+      formats: [],
+      types: ['talk'],
+      include_cfp: false,
+    });
     expect(v.types).toEqual(['talk']);
   });
 
   it('is described in plain words', () => {
     expect(
-      describePreferences({ cadence: 'weekly', countries: ['PT'], formats: [], types: ['conference', 'workshop'] }),
+      describePreferences({
+        cadence: 'weekly',
+        countries: ['PT'],
+        formats: [],
+        types: ['conference', 'workshop'],
+        include_cfp: false,
+      }),
     ).toBe('a weekly email of conferences or workshops in Portugal');
-    expect(describePreferences({ cadence: 'monthly', countries: [], formats: ['online'], types: ['talk'] })).toBe(
-      'a monthly email of online talks and webinars',
-    );
+    expect(
+      describePreferences({
+        cadence: 'monthly',
+        countries: [],
+        formats: ['online'],
+        types: ['talk'],
+        include_cfp: false,
+      }),
+    ).toBe('a monthly email of online talks and webinars');
   });
 
   it('links to the same types on the site', () => {

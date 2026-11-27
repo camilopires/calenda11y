@@ -60,3 +60,16 @@ const countries = await allCountries();
   error={e.type}
   options={EVENT_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }))}
 />
+<div class="choice">
+  <input
+    type="checkbox"
+    id="f-include_cfp"
+    name="include_cfp"
+    checked={v.include_cfp}
+    aria-describedby="f-include_cfp-hint"
+  />
+  <label for="f-include_cfp">Also tell me about calls for speakers</label>
+</div>
+<p class="hint" id="f-include_cfp-hint">
+  Calls closing in the next few weeks, even for events later in the year.
+</p>

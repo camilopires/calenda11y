@@ -10,6 +10,7 @@ export interface PreferenceValues {
   online: boolean;
   formats: string[];
   types: string[];
+  include_cfp: boolean;
 }
 
 export function readPreferences(form: FormData): PreferenceValues {
@@ -19,6 +20,7 @@ export function readPreferences(form: FormData): PreferenceValues {
     online: form.get('online') === 'on',
     formats: form.getAll('format').map(String),
     types: form.getAll('type').map(String),
+    include_cfp: form.get('include_cfp') === 'on',
   };
 }
 
@@ -29,6 +31,7 @@ export function preferencesToValues(p: Preferences): PreferenceValues {
     online: p.countries.includes('online'),
     formats: p.formats,
     types: p.types,
+    include_cfp: p.include_cfp,
   };
 }
 
@@ -50,6 +53,7 @@ export function validatePreferences(v: PreferenceValues): PreferenceValidation {
       countries: [...(v.country ? [v.country] : []), ...(v.online ? ['online'] : [])],
       formats: formats as Format[],
       types,
+      include_cfp: v.include_cfp,
     },
   };
 }

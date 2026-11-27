@@ -103,6 +103,19 @@ test.describe('email digest', () => {
     expect(data).toEqual({ cadence: 'monthly', types: ['talk'] });
   });
 
+  test('an "Open for speakers" search ticks calls for speakers on the email sign-up', async ({ page }) => {
+    await page.goto('/?cfp=open');
+    await page.getByRole('link', { name: 'Subscribe to these events' }).click();
+    await page.locator('a.button', { hasText: /email/i }).click();
+    const box = page.getByRole('checkbox', { name: 'Also tell me about calls for speakers' });
+    await expect(box).toBeChecked();
+    await page.getByLabel('Email address').fill(`speaker-${uniq()}@example.test`);
+    await page.getByRole('radio', { name: /^Monthly/ }).check();
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.locator('.check-answers')).toContainText('a monthly email of events, plus calls for speakers');
+    await expectNoAxeViolations(page, 'sign-up check with calls');
+  });
+
   test('GET on the unsubscribe link only shows a confirmation page', async ({ page }) => {
     const email = `getter-${uniq()}@example.test`;
     const { data } = await service()

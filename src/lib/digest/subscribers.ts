@@ -24,6 +24,8 @@ export interface Preferences {
   formats: Format[];
   /** Any of these types; empty means every type. */
   types: EventType[];
+  /** Also send calls for speakers closing soon. */
+  include_cfp: boolean;
 }
 
 export interface Subscriber extends Preferences {
@@ -34,7 +36,7 @@ export interface Subscriber extends Preferences {
   token_version: number;
 }
 
-const COLS = 'id,email,cadence,countries,formats,types,confirmed_at,suppressed_at,token_version';
+const COLS = 'id,email,cadence,countries,formats,types,include_cfp,confirmed_at,suppressed_at,token_version';
 const CONFIRM_DAYS = 7;
 
 export function describePreferences(p: Preferences): string {
@@ -43,7 +45,8 @@ export function describePreferences(p: Preferences): string {
     ? ` ${p.countries.map((c) => (c === 'online' ? 'you can join online' : `in ${countryName(c)}`)).join(', or ')}`
     : '';
   const kinds = p.types.length ? p.types.map((t) => TYPE_PLURALS[t]).join(' or ') : 'events';
-  return `${p.cadence === 'weekly' ? 'a weekly' : 'a monthly'} email of ${formats}${kinds}${where}`;
+  const cfp = p.include_cfp ? ', plus calls for speakers' : '';
+  return `${p.cadence === 'weekly' ? 'a weekly' : 'a monthly'} email of ${formats}${kinds}${where}${cfp}`;
 }
 
 async function sendConfirmation(subscriberId: string, email: string, prefs: Preferences): Promise<void> {
