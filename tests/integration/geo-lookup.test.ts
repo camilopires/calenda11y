@@ -51,6 +51,25 @@ describe('lookupPlace', () => {
     expect(times[1]! - times[0]!).toBeGreaterThanOrEqual(950);
   });
 
+  it('the background job never asks in the same second as a visitor', async () => {
+    const times: Array<[string, number]> = [];
+    setGeocoder({
+      search: async (q) => {
+        times.push([q, Date.now()]);
+        return fake.search(q);
+      },
+    });
+    // The job's own turn is 2 seconds away.
+    await db.from('geocode_slots').upsert({ key: 'nominatim-job', next_at: new Date(Date.now() + 2000).toISOString() });
+    const job = lookupPlace('Lisbon', { job: { deadline: Date.now() + 30_000 } });
+    // A visitor arrives just as the job's turn comes.
+    await new Promise((r) => setTimeout(r, 1900));
+    await lookupPlace('Medway', { ip: '203.0.113.6' });
+    await job;
+    expect(times).toHaveLength(2);
+    expect(Math.abs(times[0]![1] - times[1]![1])).toBeGreaterThanOrEqual(950);
+  });
+
   it('reports a failing service without caching it', async () => {
     setGeocoder({
       search: async () => {

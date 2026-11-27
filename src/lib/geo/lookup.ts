@@ -58,9 +58,16 @@ export async function lookupPlace(
   if (env().GEOCODER_OFF === '1') return { ok: false, reason: 'off' };
   if (options.ip && !(await allow(LIMITS.placeSearchPerIp, options.ip))) return { ok: false, reason: 'busy' };
 
-  // The job keeps to 4 a minute; everyone together keeps to 1 a second.
-  let startAt = await reserve('nominatim', SPACING_MS);
-  if (options.job) startAt = Math.max(startAt, await reserve('nominatim-job', options.job.spacingMs ?? JOB_SPACING_MS));
+  // The job keeps to 4 a minute: it waits for its own turn first, and only
+  // then takes a place in the shared queue, so its request keeps the
+  // 1-second spacing with everyone else's.
+  if (options.job) {
+    const jobAt = await reserve('nominatim-job', options.job.spacingMs ?? JOB_SPACING_MS);
+    if (jobAt > options.job.deadline) return { ok: false, reason: 'busy' };
+    if (jobAt > Date.now()) await sleep(jobAt - Date.now());
+  }
+  // Everyone together keeps to 1 a second.
+  const startAt = await reserve('nominatim', SPACING_MS);
   const wait = startAt - Date.now();
   if (!options.job && wait > MAX_VISITOR_WAIT_MS) return { ok: false, reason: 'busy' };
   if (options.job && startAt > options.job.deadline) return { ok: false, reason: 'busy' };

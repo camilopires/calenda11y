@@ -77,7 +77,12 @@ export class Nominatim implements Geocoder {
     if (!res.ok) throw new ServiceError('geocoder', `place search answered HTTP ${res.status}`);
     const body = (await res.json()) as NominatimResult[];
     if (!Array.isArray(body)) throw new ServiceError('geocoder', 'place search gave an unexpected answer');
-    return body.map(placeFromNominatim).filter((p): p is Place => p !== null);
+    // A town and its boundary often come back as two answers with the same
+    // label; listing both would make "Which Chatham?" offer the same choice twice.
+    const seen = new Set<string>();
+    return body
+      .map(placeFromNominatim)
+      .filter((p): p is Place => p !== null && !seen.has(p.label) && !!seen.add(p.label));
   }
 }
 

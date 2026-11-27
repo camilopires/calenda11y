@@ -34,6 +34,17 @@ describe('Nominatim', () => {
     expect(seen!.headers['Accept-Language']).toBe('en');
   });
 
+  it('lists the same place once, even when the answer has it twice', async () => {
+    // Nominatim often answers with a town and its boundary, which read the same.
+    const twice = (async () =>
+      new Response(JSON.stringify([chatham, { ...chatham, lat: '51.37' }]), {
+        status: 200,
+      })) as unknown as typeof fetch;
+    const places = await new Nominatim('https://geo.example/search', 'https://x', twice).search('Chatham');
+    expect(places).toHaveLength(1);
+    expect(places[0]!.lat).toBe(51.3807);
+  });
+
   it('reports HTTP errors and network failures as service errors', async () => {
     const down = (async () => new Response('busy', { status: 429 })) as unknown as typeof fetch;
     await expect(new Nominatim('https://geo.example/search', 'https://x', down).search('a')).rejects.toThrow(
