@@ -180,4 +180,34 @@ test.describe('calendar integrations', () => {
     expect(address).toMatch(/\/feeds\/cfp\.ics\?type=conference$/);
     await expectNoAxeViolations(page, 'subscribe with deadlines');
   });
+  test('every feed can be filtered by topic; a country feed keeps its own country', async ({ request }) => {
+    const titles = async (path: string) => {
+      const res = await request.get(path);
+      expect(res.status(), path).toBe(200);
+      return parseIcs(await res.text()).map((e) => e.summary);
+    };
+    for (const path of ['/feeds/events.ics?topic=testing', '/feeds/all.ics?topic=testing']) {
+      const t = await titles(path);
+      expect(t).toContain('WCAG 2.2 in practice');
+      expect(t).not.toContain('Berlin a11y Stammtisch');
+    }
+    expect(await titles('/feeds/PT.ics?topic=inclusive-design')).toContain('Lisbon Inclusive Design Meetup');
+    expect(await titles('/feeds/PT.ics?topic=law')).toEqual([]);
+    // The address says Portugal, whatever the query says.
+    expect(await titles('/feeds/PT.ics?country=DE')).not.toContain('Berlin a11y Stammtisch');
+    expect((await request.get('/feeds/all.ics?topic=nope')).status()).toBe(400);
+    expect((await request.get('/feeds/PT.ics?topic=nope')).status()).toBe(400);
+    const rss = await (await request.get('/feeds/events.rss?topic=testing')).text();
+    expect(rss).toContain('<category>Testing and auditing</category>');
+  });
+
+  test('the event page links each topic to its page', async ({ page }) => {
+    await page.goto('/events/wcag-22-in-practice');
+    const details = page.locator('dl.details-list');
+    await expect(details.getByRole('link', { name: 'Testing and auditing' })).toHaveAttribute(
+      'href',
+      '/topics/testing',
+    );
+    await expect(details.getByRole('link', { name: 'Law and compliance' })).toHaveAttribute('href', '/topics/law');
+  });
 });

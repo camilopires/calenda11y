@@ -1,5 +1,5 @@
 /** An RSS 2.0 feed of events. */
-import { TYPE_LABELS, type PublicEvent } from '../events/model.ts';
+import { TOPIC_LABELS, TYPE_LABELS, type PublicEvent } from '../events/model.ts';
 import { describeWhen } from '../events/dates.ts';
 import { cfpDeadline } from '../events/cfp.ts';
 import { eventLocation, eventPageUrl } from './ics.ts';
@@ -37,6 +37,7 @@ export function buildRss(events: readonly PublicEvent[], o: FeedOptions): string
       `      <guid isPermaLink="true">${escapeXml(link)}</guid>`,
       `      <description>${escapeXml(desc)}</description>`,
       ...e.types.map((t) => `      <category>${escapeXml(TYPE_LABELS[t])}</category>`),
+      ...e.topics.map((t) => `      <category>${escapeXml(TOPIC_LABELS[t])}</category>`),
       `      <pubDate>${new Date(e.approved_at ?? e.updated_at).toUTCString()}</pubDate>`,
       '    </item>',
     ].join('\n');

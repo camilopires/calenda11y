@@ -8,6 +8,8 @@ import {
   ACCESS_LABELS,
   FORMAT_LABELS,
   PRICE_LABELS,
+  TOPIC_LABELS,
+  TOPIC_SLUGS,
   TYPE_LABELS,
   accessProvisions,
   countryName,
@@ -78,6 +80,19 @@ const cfpText = cfpSentence(event, new Date());
           <>
             <dt>Type</dt>
             <dd>{event.types.map((ty) => TYPE_LABELS[ty]).join(', ')}</dd>
+          </>
+        )}
+        {event.topics.length > 0 && (
+          <>
+            <dt>Topics</dt>
+            <dd>
+              {event.topics.map((tp, i) => (
+                <>
+                  {i > 0 && ', '}
+                  <a href={`/topics/${TOPIC_SLUGS[tp]}`}>{TOPIC_LABELS[tp]}</a>
+                </>
+              ))}
+            </dd>
           </>
         )}
         <dt>Format</dt>

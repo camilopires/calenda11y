@@ -77,3 +77,26 @@ describe('calls for speakers in event feeds', () => {
     expect(xml).toContain('Call for speakers: apply by Monday 15 March 2027: https://cfp.example/apply?a=1&amp;b=2');
   });
 });
+
+describe('topics in feeds', () => {
+  const tagged = call({ types: ['conference'], topics: ['testing', 'law'] });
+  it('event and deadline calendars list types and topics as CATEGORIES', () => {
+    for (const text of [
+      buildCalendar([tagged], { name: 'c', siteUrl: SITE }),
+      buildCfpCalendar([tagged], { name: 'c', siteUrl: SITE }),
+    ]) {
+      const [e] = parse(text);
+      expect(e!.component.getFirstProperty('categories')!.getValues()).toEqual([
+        'Conference',
+        'Testing and auditing',
+        'Law and compliance',
+      ]);
+    }
+  });
+
+  it('RSS has a category for each topic', () => {
+    const xml = buildRss([tagged], { title: 'c', description: 'd', siteUrl: SITE, selfUrl: `${SITE}/x.rss` });
+    expect(xml).toContain('<category>Testing and auditing</category>');
+    expect(xml).toContain('<category>Law and compliance</category>');
+  });
+});

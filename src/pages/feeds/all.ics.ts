@@ -1,5 +1,9 @@
 import type { APIRoute } from 'astro';
-import { icsResponse } from '../../lib/calendar/feeds';
-import { parseFilters } from '../../lib/events/predicates';
+import { badFeedRequest, icsResponse, parseFeedFilters } from '../../lib/calendar/feeds';
 
-export const GET: APIRoute = () => icsResponse(parseFilters(new URLSearchParams()).filters);
+/** Every event, or any filters given: /feeds/all.ics?topic=testing */
+export const GET: APIRoute = ({ url }) => {
+  const { filters, errors } = parseFeedFilters(url.searchParams);
+  if (Object.keys(errors).length) return badFeedRequest(errors);
+  return icsResponse(filters);
+};

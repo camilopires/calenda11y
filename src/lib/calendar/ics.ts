@@ -11,7 +11,7 @@
  * - Lines end in CRLF and are folded at 75 octets without splitting a UTF-8
  *   character.
  */
-import { TYPE_LABELS, countryName, type PublicEvent } from '../events/model.ts';
+import { TOPIC_LABELS, TYPE_LABELS, countryName, type PublicEvent } from '../events/model.ts';
 import { zoneCity } from '../events/dates.ts';
 import { cfpDeadline } from '../events/cfp.ts';
 
@@ -108,8 +108,7 @@ function vevent(e: PublicEvent, siteUrl: string): string[] {
     `DESCRIPTION:${escapeText(eventDescription(e, siteUrl))}`,
     `LOCATION:${escapeText(eventLocation(e))}`,
     `URL:${eventPageUrl(siteUrl, e.slug)}`,
-    // Each type is one value; the commas between them are list separators, not text.
-    ...(e.types.length ? [`CATEGORIES:${e.types.map((t) => escapeText(TYPE_LABELS[t])).join(',')}`] : []),
+    ...categoriesLine(e),
     `STATUS:${e.status === 'cancelled' ? 'CANCELLED' : 'CONFIRMED'}`,
     'TRANSP:TRANSPARENT',
     'END:VEVENT',
@@ -128,6 +127,16 @@ export function buildCalendar(events: readonly PublicEvent[], options: CalendarO
     options,
     events.flatMap((e) => vevent(e, options.siteUrl)),
   );
+}
+
+/**
+ * CATEGORIES: the event's types, then its topics. Each label is one value;
+ * the commas between them are list separators, not text. Shared by the
+ * event feeds and the speaking-deadline feed.
+ */
+export function categoriesLine(e: Pick<PublicEvent, 'types' | 'topics'>): string[] {
+  const labels = [...e.types.map((t) => TYPE_LABELS[t]), ...e.topics.map((t) => TOPIC_LABELS[t])];
+  return labels.length ? [`CATEGORIES:${labels.map(escapeText).join(',')}`] : [];
 }
 
 /** Wraps VEVENT lines in a complete, folded calendar. */
