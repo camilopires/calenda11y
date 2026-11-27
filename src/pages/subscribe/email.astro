@@ -88,6 +88,7 @@ if (Astro.request.method === 'POST') {
 ---
 
 <BaseLayout
+  hasErrors={Object.keys(errors).length > 0 || general.length > 0}
   title={view === 'check' ? 'Check your email choices' : view === 'done' ? 'Check your email' : 'Get events by email'}
   nav="subscribe"
   breadcrumbs={[{ href: '/subscribe', label: 'Subscribe' }]}

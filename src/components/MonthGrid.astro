@@ -12,7 +12,9 @@ const { grid, dayHref } = Astro.props;
 const caption = `${formatMonthYear(grid.month)}: ${grid.eventCount} ${grid.eventCount === 1 ? 'event' : 'events'}`;
 ---
 
-{/* A scrollable region must be focusable so keyboard users can scroll it (WCAG 2.1.1). */}
+{/* A scrollable region must be focusable so keyboard users can scroll it (WCAG 2.1.1).
+    It starts focusable, so it always works without JavaScript; the script below
+    removes the tab stop while there is nothing to scroll. */}
 {/* eslint-disable-next-line astro/jsx-a11y/no-noninteractive-tabindex */}
 <section class="grid-scroll" aria-labelledby="grid-caption" tabindex="0">
   <table class="month-grid">
@@ -67,3 +69,14 @@ const caption = `${formatMonthYear(grid.month)}: ${grid.eventCount} ${grid.event
     </tbody>
   </table>
 </section>
+
+<script>
+  for (const region of document.querySelectorAll<HTMLElement>('.grid-scroll')) {
+    const update = () => {
+      if (region.scrollWidth > region.clientWidth + 1) region.setAttribute('tabindex', '0');
+      else region.removeAttribute('tabindex');
+    };
+    update();
+    new ResizeObserver(update).observe(region);
+  }
+</script>

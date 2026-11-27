@@ -104,6 +104,7 @@ const title = view === 'check' ? 'Check your answers' : 'Add an event';
 ---
 
 <BaseLayout
+  hasErrors={Object.keys(errors).length > 0 || general.length > 0}
   title={title}
   nav="submit"
   breadcrumbs={view === 'check' ? [{ href: '/submit', label: 'Add an event' }] : []}

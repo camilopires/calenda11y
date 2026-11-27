@@ -69,12 +69,41 @@ test.describe('adding an event', () => {
     await page.getByRole('button', { name: 'Continue' }).click();
     const summary = page.locator('.error-summary');
     await expect(summary).toBeFocused();
+    // Focus announces it, so it isn't also an alert (that reads it twice).
+    await expect(summary).not.toHaveAttribute('role');
+    await expect(page).toHaveTitle(/^Error: Add an event \| calenda11y$/);
     expect(await summary.getByRole('link').count()).toBeGreaterThanOrEqual(9);
     await summary.getByRole('link', { name: 'Enter the website address in full, starting with https://' }).click();
     await expect(page.getByLabel('Event website')).toBeFocused();
     // What was typed is kept.
     await expect(page.getByLabel('Event website')).toHaveValue('http://not-secure.example');
     await expect(page.getByLabel('Event website')).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  test('without JavaScript, errors are in the title, the summary and on each field', async ({ browser, baseURL }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false, baseURL: baseURL! });
+    const page = await context.newPage();
+    await ownIp(page);
+    await page.goto('/submit');
+    await expect(page).toHaveTitle('Add an event | calenda11y');
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page).toHaveTitle(/^Error: Add an event/);
+    await expect(page.locator('.error-summary')).toContainText('Enter the name of the event');
+    await expect(page.locator('#f-title-error')).toContainText('Enter the name of the event');
+    await context.close();
+  });
+
+  test('other forms put "Error:" in the title too', async ({ page }) => {
+    await page.goto('/?from=nope');
+    await expect(page).toHaveTitle(/^Error: /);
+    await page.goto('/admin/login');
+    await page.getByLabel('Email address').fill('not-an-email');
+    await page.getByRole('button', { name: /link/i }).click();
+    await expect(page).toHaveTitle(/^Error: Sign in to admin/);
+    await page.goto('/sponsor?error=choice');
+    await expect(page).toHaveTitle(/^Error: Sponsor calenda11y/);
+    await page.goto('/');
+    await expect(page).not.toHaveTitle(/^Error/);
   });
 
   test('a tampered check page is refused', async ({ page }) => {

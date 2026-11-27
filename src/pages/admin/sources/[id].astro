@@ -46,6 +46,7 @@ const runs = await recentRuns(source.id);
 ---
 
 <AdminLayout
+  hasErrors={Object.keys(errors).length > 0}
   title={source.name}
   admin={guard.admin}
   current="sources"

@@ -1,5 +1,6 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Abbreviated from '../../../components/Abbreviated.astro';
 import ErrorSummary from '../../../components/ErrorSummary.astro';
 import EventFields from '../../../components/EventFields.astro';
 import Field from '../../../components/Field.astro';
@@ -126,6 +127,7 @@ const STATUS: Record<string, string> = {
 ---
 
 <AdminLayout
+  hasErrors={Object.keys(errors).length > 0 || general.length > 0}
   title={view === 'reject' ? `Reject: ${e.title}` : e.title}
   admin={guard.admin}
   current="queue"
@@ -179,7 +181,7 @@ const STATUS: Record<string, string> = {
       <div class="page-head">
         <h1 lang={e.lang}>{e.title}</h1>
         <p class="lede">
-          {STATUS[e.status]}. {when.date}, {when.time}.
+          {STATUS[e.status]}. {when.date}, <Abbreviated text={when.time} />.
         </p>
       </div>
 

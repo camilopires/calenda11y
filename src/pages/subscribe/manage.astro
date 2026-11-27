@@ -26,7 +26,13 @@ if (sub && Astro.request.method === 'POST') {
 const action = `/subscribe/manage?token=${encodeURIComponent(token)}`;
 ---
 
-<BaseLayout title="Your emails" nav="subscribe" breadcrumbs={[{ href: '/subscribe', label: 'Subscribe' }]} noindex>
+<BaseLayout
+  hasErrors={Object.keys(errors).length > 0}
+  title="Your emails"
+  nav="subscribe"
+  breadcrumbs={[{ href: '/subscribe', label: 'Subscribe' }]}
+  noindex
+>
   {!sub || !values ? (
     <div class="notice notice--error flow-tight">
       <h1>That link doesn't work</h1>

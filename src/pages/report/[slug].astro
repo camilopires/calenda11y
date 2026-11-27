@@ -62,6 +62,7 @@ if (Astro.request.method === 'POST') {
 ---
 
 <BaseLayout
+  hasErrors={Object.keys(errors).length > 0 || general.length > 0}
   title={view === 'check' ? 'Check your report' : view === 'done' ? 'Report sent' : 'Report a problem'}
   breadcrumbs={[{ href: `/events/${event.slug}`, label: event.title }]}
   noindex

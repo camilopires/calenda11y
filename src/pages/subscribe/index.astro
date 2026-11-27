@@ -18,7 +18,12 @@ const description = describeFilters(filters);
 const topCountries = (await countryCounts()).sort((a, b) => b.upcoming - a.upcoming).slice(0, 8);
 ---
 
-<BaseLayout title="Subscribe to events" nav="subscribe" crumbLabel="Subscribe">
+<BaseLayout
+  hasErrors={Object.keys(errors).length > 0}
+  title="Subscribe to events"
+  nav="subscribe"
+  crumbLabel="Subscribe"
+>
   <div class="page-head">
     <h1>Subscribe to events</h1>
     <p class="lede">Get new accessibility events in your calendar app, a feed reader, or your inbox.</p>

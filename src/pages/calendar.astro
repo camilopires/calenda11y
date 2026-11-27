@@ -62,7 +62,12 @@ const dayHref = (date: string) => {
 const listQs = keep.toString();
 ---
 
-<BaseLayout title={`Month view: ${formatMonthYear(month)}`} nav="calendar" crumbLabel="Month view">
+<BaseLayout
+  hasErrors={Object.keys(errors).length > 0}
+  title={`Month view: ${formatMonthYear(month)}`}
+  nav="calendar"
+  crumbLabel="Month view"
+>
   <div class="page-head">
     <h1>Accessibility events in {formatMonthYear(month)}</h1>
     <p class="lede">The same events as the list, shown on a calendar.</p>

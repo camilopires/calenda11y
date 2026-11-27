@@ -33,6 +33,7 @@ const countText =
 ---
 
 <BaseLayout
+  hasErrors={Object.keys(errors).length > 0}
   title={past ? 'Past accessibility events' : t('site.tagline')}
   nav="events"
   isHome={!past}

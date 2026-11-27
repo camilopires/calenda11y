@@ -201,4 +201,15 @@ test.describe('admin', () => {
     expect(res.status()).toBe(303);
     expect((await page.context().cookies()).some((c) => c.name === 'admin_draft')).toBe(false);
   });
+  test('rejecting without a reason moves focus to the error summary, not the heading', async ({ page }) => {
+    const id = await submitEvent(page, `No reason ${uniq()}`);
+    await signIn(page, await ensureAdmin(), `/admin/events/${id}`);
+    await page.getByRole('button', { name: 'Reject' }).click();
+    await page.getByRole('button', { name: 'Reject event' }).click();
+    await expect(page.locator('.error-summary')).toBeFocused();
+    await expect(page).toHaveTitle(/^Error: /);
+    // The event's time explains its time zone abbreviation here too.
+    await page.goto(`/admin/events/${id}`);
+    await expect(page.locator('.lede abbr').first()).toHaveAttribute('title', /Mean Time|Universal Time/);
+  });
 });

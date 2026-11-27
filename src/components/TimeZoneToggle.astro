@@ -30,14 +30,16 @@
     const apply = (local: boolean) => {
       button.setAttribute('aria-pressed', String(local));
       for (const el of times) {
-        el.dataset.original ??= el.textContent ?? '';
-        if (!local) {
-          el.textContent = el.dataset.original;
-          continue;
+        const own = el.querySelector<HTMLElement>('[data-own]');
+        const viewer = el.querySelector<HTMLElement>('[data-viewer]');
+        if (!own || !viewer) continue;
+        if (local && !viewer.textContent) {
+          const start = new Date(el.dataset.start!);
+          const end = new Date(el.dataset.end!);
+          viewer.textContent = `${time.format(start)} to ${time.format(end)} your time (${day.format(start)})`;
         }
-        const start = new Date(el.dataset.start!);
-        const end = new Date(el.dataset.end!);
-        el.textContent = `${time.format(start)} to ${time.format(end)} your time (${day.format(start)})`;
+        own.hidden = local;
+        viewer.hidden = !local;
       }
       try {
         localStorage.setItem('tz-local', local ? '1' : '0');

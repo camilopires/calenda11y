@@ -9,7 +9,7 @@ const error = Astro.url.searchParams.get('error');
 const cancelled = Astro.url.searchParams.get('cancelled') === '1';
 ---
 
-<BaseLayout title="Sponsor calenda11y" nav="sponsor" crumbLabel="Sponsor">
+<BaseLayout hasErrors={!!error} title="Sponsor calenda11y" nav="sponsor" crumbLabel="Sponsor">
   <div class="page-head">
     <h1>Sponsor calenda11y</h1>
     <p class="lede">
@@ -23,7 +23,7 @@ const cancelled = Astro.url.searchParams.get('cancelled') === '1';
     </div>
   )}
   {error && (
-    <div class="notice notice--error" role="alert" tabindex="-1" data-focus-on-load>
+    <div class="notice notice--error" tabindex="-1" data-focus-on-load>
       <p>
         {error === 'busy'
           ? 'There have been a lot of attempts from this connection. Wait an hour and try again.'

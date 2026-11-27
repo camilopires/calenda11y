@@ -71,7 +71,12 @@ if (Astro.request.method === 'POST') {
 }
 ---
 
-<BaseLayout title="Manage your sponsorship" nav="sponsor" breadcrumbs={[{ href: '/sponsor', label: 'Sponsor' }]}>
+<BaseLayout
+  hasErrors={Object.keys(errors).length > 0}
+  title="Manage your sponsorship"
+  nav="sponsor"
+  breadcrumbs={[{ href: '/sponsor', label: 'Sponsor' }]}
+>
   <div class="page-head">
     <h1>Manage your sponsorship</h1>
     <p class="lede">We'll email you links to change your profile, update payments, get receipts or cancel.</p>

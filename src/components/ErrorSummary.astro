@@ -12,12 +12,13 @@ interface Props {
 const { errors, general = [], targets = {} } = Astro.props;
 const entries = Object.entries(errors);
 const show = entries.length > 0 || general.length > 0;
+// No role="alert": focus moves here on load, which announces it, and an
+// alert as well makes some screen readers read it twice.
 ---
 
 {show && (
   <div
     class="notice notice--error error-summary"
-    role="alert"
     aria-labelledby="error-summary-title"
     tabindex="-1"
     data-focus-on-load

@@ -87,7 +87,7 @@ const logos = new Map(
 );
 ---
 
-<AdminLayout title="Sponsors" admin={guard.admin} current="sponsors">
+<AdminLayout hasErrors={Object.keys(errors).length > 0} title="Sponsors" admin={guard.admin} current="sponsors">
   <div class="page-head">
     <h1>Sponsors</h1>
   </div>

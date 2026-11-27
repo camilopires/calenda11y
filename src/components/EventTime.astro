@@ -1,20 +1,23 @@
 ---
 import { describeWhen } from '../lib/events/dates';
 import type { PublicEvent } from '../lib/events/model';
+import Abbreviated from './Abbreviated.astro';
 
 interface Props {
   event: PublicEvent;
 }
 const { event } = Astro.props;
 const when = describeWhen(event);
+const timed = !event.all_day && !!event.starts_at;
 ---
 
 <time datetime={event.all_day ? event.local_start_date : (event.starts_at ?? event.local_start_date)}>{when.date}</time>
 {', '}
-<span
-  data-local-time
-  data-start={event.all_day ? undefined : event.starts_at}
-  data-end={event.all_day ? undefined : event.ends_at}
->
-  {when.time}
+{/* The time zone toggle fills [data-viewer] and swaps which one is hidden, so the
+    event's own time (with its explained abbreviations) is never rewritten. */}
+<span data-local-time data-start={timed ? event.starts_at : undefined} data-end={timed ? event.ends_at : undefined}>
+  <span data-own>
+    <Abbreviated text={when.time} />
+  </span>
+  {timed && <span data-viewer hidden />}
 </span>

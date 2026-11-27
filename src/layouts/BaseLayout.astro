@@ -30,6 +30,8 @@ interface Props {
   /** Home has no breadcrumb trail. */
   isHome?: boolean;
   canonical?: string;
+  /** The page is showing form errors: the title starts with "Error: " (WCAG 3.3.1). */
+  hasErrors?: boolean;
 }
 
 const {
@@ -41,10 +43,12 @@ const {
   noindex = false,
   isHome = false,
   canonical,
+  hasErrors = false,
 } = Astro.props;
 
 const attrs = displayAttributes(Astro.locals.display);
-const fullTitle = isHome ? `${t('site.name')}: ${t('site.tagline')}` : `${title} | ${t('site.name')}`;
+const baseTitle = isHome ? `${t('site.name')}: ${t('site.tagline')}` : `${title} | ${t('site.name')}`;
+const fullTitle = hasErrors ? `${t('error.title.prefix')}${baseTitle}` : baseTitle;
 
 const navItems: Array<{ key: NavKey; href: string; label: string }> = [
   { key: 'events', href: '/', label: t('nav.events') },
@@ -120,9 +124,13 @@ const sponsorNames = await footerSponsors();
     <script>
       // Moves focus to the first [data-focus-on-load] element (an error
       // summary, a confirmation, or the results after filtering), so
-      // keyboard and screen reader users land on what changed. Without
+      // keyboard and screen reader users land on what changed. An error
+      // summary always wins: it is how errors are announced. Without
       // JavaScript these are still the first thing in <main>.
-      document.querySelector<HTMLElement>('[data-focus-on-load]')?.focus();
+      (
+        document.querySelector<HTMLElement>('.error-summary[data-focus-on-load]') ??
+        document.querySelector<HTMLElement>('[data-focus-on-load]')
+      )?.focus();
     </script>
   </body>
 </html>

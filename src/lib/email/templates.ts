@@ -1,7 +1,8 @@
 /** Transactional emails. Each returns subject, HTML and plain text. */
 import { env } from '../env.ts';
 import { describeWhen } from '../events/dates.ts';
-import { renderEmail, type EmailContent } from './render.ts';
+import { zoneNote } from '../text/abbr.ts';
+import { renderEmail, type Block, type EmailContent } from './render.ts';
 
 const site = () => env().SITE_URL;
 const url = (path: string) => new URL(path, site()).href;
@@ -22,9 +23,16 @@ const whenText = (e: EventLike) => {
   return `${w.date}, ${w.time}`;
 };
 
+/** A closing paragraph expanding UTC or GMT, if any of these times use them (WCAG 3.1.4). */
+const zoneBlocks = (times: string[]): Block[] => {
+  const note = zoneNote(times);
+  return note ? [{ type: 'p', text: note }] : [];
+};
+
 export function submissionReceived(e: EventLike): EmailContent {
   return renderEmail(`We've got your event: ${e.title}`, 'Thanks, we have your event', [
     { type: 'p', text: `You added "${e.title}" (${whenText(e)}) to calenda11y.` },
+    ...zoneBlocks([whenText(e)]),
     {
       type: 'p',
       text: 'A person will check it, usually within 2 working days. We will email you when it is published, or if there is a problem.',
@@ -36,6 +44,7 @@ export function submissionReceived(e: EventLike): EmailContent {
 export function newSubmissionForAdmins(e: EventLike & { id: string }, flags: string[]): EmailContent {
   return renderEmail(`New event to check: ${e.title}`, 'A new event is waiting for review', [
     { type: 'p', text: `"${e.title}", ${whenText(e)}.` },
+    ...zoneBlocks([whenText(e)]),
     ...(flags.length ? [{ type: 'p' as const, text: `Flags: ${flags.join(', ')}.` }] : []),
     { type: 'link', text: 'Review the event', href: url(`/admin/events/${e.id}`) },
   ]);
@@ -132,6 +141,7 @@ export function digestEmail(
       more && options.listUrl
         ? { type: 'link', text: `See all ${total} events on calenda11y`, href: options.listUrl }
         : { type: 'link', text: 'See all events on calenda11y', href: options.listUrl ?? url('/') },
+      ...zoneBlocks(items.map((i) => i.when)),
     ],
     [
       { type: 'p', text: 'You get this because you signed up for calenda11y emails.' },

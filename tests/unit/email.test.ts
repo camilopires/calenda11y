@@ -31,7 +31,7 @@ describe('backoffMinutes', () => {
   });
 });
 
-import { digestEmail } from '../../src/lib/email/templates.ts';
+import { digestEmail, submissionReceived } from '../../src/lib/email/templates.ts';
 
 describe('digestEmail', () => {
   const item = { title: 'A', url: 'https://x.test/a', when: 'Monday', where: 'Online', summary: 'S.' };
@@ -40,5 +40,40 @@ describe('digestEmail', () => {
     expect(e.text).toContain('60 events match your choices. Here are the first 1.');
     expect(e.text).toContain('See all 60 events on calenda11y: https://x.test/?country=PT');
     expect(digestEmail('H', [item, item], 'https://m', 'https://u').text).toContain('2 events for you.');
+  });
+});
+
+describe('time zone abbreviations in emails', () => {
+  const lisbon = {
+    title: 'Meetup',
+    slug: 'meetup',
+    all_day: false,
+    starts_at: '2026-11-30T18:30:00Z',
+    ends_at: '2026-11-30T20:30:00Z',
+    local_start_date: '2026-11-30',
+    local_end_date: '2026-11-30',
+    timezone: 'Europe/Lisbon',
+  };
+
+  it('the submission receipt explains GMT in both versions', () => {
+    const e = submissionReceived(lisbon);
+    expect(e.text).toContain('GMT means Greenwich Mean Time');
+    expect(e.html).toContain('GMT means Greenwich Mean Time');
+  });
+
+  it('a digest explains UTC', () => {
+    const item = {
+      title: 'T',
+      url: 'https://x.test/e',
+      when: 'Monday, 17:00 to 18:00, UTC',
+      where: 'Online',
+      summary: 'S',
+    };
+    expect(digestEmail('H', [item], 'https://m', 'https://u').text).toContain('UTC means Coordinated Universal Time');
+  });
+
+  it('an all-day event gets no note', () => {
+    const e = submissionReceived({ ...lisbon, all_day: true, starts_at: null, ends_at: null });
+    expect(e.text).not.toContain('means');
   });
 });

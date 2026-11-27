@@ -1,0 +1,11 @@
+---
+/** Text with its time zone abbreviations (UTC, GMT) marked up and expanded (WCAG 3.1.4). */
+import { splitAbbreviations } from '../lib/text/abbr';
+
+interface Props {
+  text: string;
+}
+const { text } = Astro.props;
+---
+
+{splitAbbreviations(text).map((p) => (p.title ? <abbr title={p.title}>{p.text}</abbr> : p.text))}

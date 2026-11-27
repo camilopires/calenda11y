@@ -36,7 +36,13 @@ if (Astro.request.method === 'POST') {
 }
 ---
 
-<BaseLayout title="Sign in to admin" nav="admin" noindex crumbLabel="Admin sign in">
+<BaseLayout
+  hasErrors={Object.keys(errors).length > 0}
+  title="Sign in to admin"
+  nav="admin"
+  noindex
+  crumbLabel="Admin sign in"
+>
   <div class="page-head">
     <h1>Sign in to admin</h1>
     <p class="lede">For people who check events for calenda11y.</p>

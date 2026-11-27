@@ -63,7 +63,13 @@ if (sponsor && Astro.request.method === 'POST') {
 const welcome = Astro.url.searchParams.get('welcome') === '1';
 ---
 
-<BaseLayout title="Your sponsor profile" nav="sponsor" breadcrumbs={[{ href: '/sponsor', label: 'Sponsor' }]} noindex>
+<BaseLayout
+  hasErrors={Object.keys(errors).length > 0}
+  title="Your sponsor profile"
+  nav="sponsor"
+  breadcrumbs={[{ href: '/sponsor', label: 'Sponsor' }]}
+  noindex
+>
   {landing ? (
     <div class="page-head flow">
       <h1>Your sponsor profile</h1>

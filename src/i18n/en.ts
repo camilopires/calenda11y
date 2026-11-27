@@ -29,6 +29,7 @@ export const en = {
   'footer.sponsors': 'Thanks to our sponsors',
   'footer.licence': 'Code under the MIT licence. Event data under CC BY 4.0.',
   'error.summary.title': 'There is a problem',
+  'error.title.prefix': 'Error: ',
 } as const;
 
 export type MessageKey = keyof typeof en;

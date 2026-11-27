@@ -47,6 +47,7 @@ if (guard.form) {
 ---
 
 <AdminLayout
+  hasErrors={Object.keys(errors).length > 0}
   title="Add a source"
   admin={guard.admin}
   current="sources"

@@ -10,8 +10,10 @@ interface Props {
   current: 'queue' | 'reports' | 'emails' | 'sources' | 'jobs' | 'sponsors' | 'subscribers' | 'none';
   /** The admin home page: its breadcrumb is just Home / Admin. */
   isRoot?: boolean;
+  /** The page is showing form errors (see BaseLayout). */
+  hasErrors?: boolean;
 }
-const { title, admin, breadcrumbs = [], current, isRoot = false } = Astro.props;
+const { title, admin, breadcrumbs = [], current, isRoot = false, hasErrors = false } = Astro.props;
 const crumbs = isRoot ? [] : [{ href: '/admin', label: 'Admin' }, ...breadcrumbs];
 const issues = await problems();
 const nav = [
@@ -25,7 +27,14 @@ const nav = [
 ] as const;
 ---
 
-<BaseLayout title={`${title} (admin)`} crumbLabel={isRoot ? 'Admin' : title} nav="admin" noindex breadcrumbs={crumbs}>
+<BaseLayout
+  title={`${title} (admin)`}
+  crumbLabel={isRoot ? 'Admin' : title}
+  nav="admin"
+  noindex
+  breadcrumbs={crumbs}
+  hasErrors={hasErrors}
+>
   <div class="admin-bar">
     <nav aria-label="Admin">
       <ul class="bare-list admin-nav">

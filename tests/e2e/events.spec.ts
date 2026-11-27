@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { expect, expectNoAxeViolations, expectValidHtml, test } from '../a11y/fixtures.ts';
 
 const PAGES = [
@@ -134,6 +135,9 @@ test.describe('event pages', () => {
     await expect(page.getByText(/13:30 to 15:30 your time/)).toBeVisible();
     await toggle.click();
     await expect(page.getByText(/18:30 to 20:30, Lisbon time/)).toBeVisible();
+    // Switching back keeps the explained abbreviation, and hides the converted time.
+    await expect(page.locator('main abbr[title="Greenwich Mean Time"]').first()).toBeVisible();
+    await expect(page.getByText(/13:30 to 15:30 your time/)).toBeHidden();
     await context.close();
   });
 
@@ -166,14 +170,67 @@ test.describe('event pages', () => {
     });
   }
 
-  test('the month grid scroll region can be reached and scrolled by keyboard', async ({ page }) => {
+  /** Presses Tab until the grid's scroll region has focus, or the page runs out of stops. */
+  async function tabToGridRegion(page: Page): Promise<boolean> {
+    for (let i = 0; i < 80; i++) {
+      await page.keyboard.press('Tab');
+      const where = await page.evaluate(() => {
+        const el = document.activeElement;
+        return el?.classList.contains('grid-scroll') ? 'region' : el === document.body ? 'end' : 'other';
+      });
+      if (where === 'region') return true;
+      if (where === 'end') return false;
+    }
+    return false;
+  }
+
+  test('the month grid scroll region can be reached with Tab and scrolled when it scrolls', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     await page.goto('/calendar');
-    const region = page.getByRole('region', { name: /events$/ });
-    await region.focus();
-    await expect(region).toBeFocused();
+    expect(await tabToGridRegion(page)).toBe(true);
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowRight');
+    const region = page.locator('.grid-scroll');
     await expect.poll(() => region.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  });
+
+  test('the month grid is only a tab stop while it scrolls, and follows resizing', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/calendar');
+    const region = page.locator('.grid-scroll');
+    await expect(region).not.toHaveAttribute('tabindex');
+    expect(await tabToGridRegion(page)).toBe(false);
+    // It stays a named region either way.
+    await expect(page.getByRole('region', { name: /events$/ })).toBeVisible();
+    await page.setViewportSize({ width: 320, height: 640 });
+    await expect(region).toHaveAttribute('tabindex', '0');
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(region).not.toHaveAttribute('tabindex');
+  });
+
+  test('without JavaScript the month grid can always be reached and scrolled', async ({ browser, baseURL }) => {
+    const context = await browser.newContext({
+      javaScriptEnabled: false,
+      baseURL: baseURL!,
+      viewport: { width: 320, height: 640 },
+    });
+    const page = await context.newPage();
+    await page.goto('/calendar');
+    await expect(page.locator('.grid-scroll')).toHaveAttribute('tabindex', '0');
+    expect(await tabToGridRegion(page)).toBe(true);
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await expect.poll(() => page.locator('.grid-scroll').evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+    await context.close();
+  });
+
+  test('time zone abbreviations are explained', async ({ page }) => {
+    await page.goto('/events/lisbon-inclusive-design-meetup');
+    await expect(page.locator('abbr[title="Greenwich Mean Time"]').first()).toHaveText('GMT');
+    await page.goto('/events/online-a11y-talk-1');
+    await expect(page.locator('abbr[title="Coordinated Universal Time"]').first()).toHaveText('UTC');
+    await page.goto('/glossary');
+    await expect(page.locator('dt', { hasText: /^UTC$/ })).toBeVisible();
+    await expect(page.locator('dt', { hasText: /^GMT$/ })).toBeVisible();
   });
 });
