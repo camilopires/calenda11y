@@ -47,6 +47,15 @@ describe('buildCfpCalendar', () => {
     expect(e!.startDate.toString()).toBe('2026-12-01');
   });
 
+  it('never lets a link add lines to the calendar, even one already stored', () => {
+    const text = buildCfpCalendar([call({ cfp_url: 'https://cfp.example/apply\r\nSTATUS:CANCELLED' })], {
+      name: 'c',
+      siteUrl: SITE,
+    });
+    expect(text).not.toMatch(/^STATUS:CANCELLED/m);
+    expect(text).toContain('URL:https://cfp.example/applySTATUS:CANCELLED\r\n');
+  });
+
   it('leaves out events without a call', () => {
     expect(buildCfpCalendar([makeEvent()], { name: 'c', siteUrl: SITE })).not.toContain('BEGIN:VEVENT');
   });

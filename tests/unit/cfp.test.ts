@@ -108,6 +108,18 @@ describe('cfpClosesAt (the same rule as the database)', () => {
     ).toEqual({ at: '2032-05-31T22:00:00.000Z', lastDay: '2032-05-31', capped: false });
   });
 
+  it('when midnight happens twice (clocks going back), uses the later one, as PostgreSQL does', () => {
+    // Cuba's clocks go back from 01:00 to 00:00 on 7 November 2027.
+    expect(
+      cfpClosesAt({
+        ...base,
+        timezone: 'America/Havana',
+        starts_at: '2027-12-01T18:00:00Z',
+        cfp_closes_on: '2027-11-06',
+      }),
+    ).toEqual({ at: '2027-11-07T05:00:00.000Z', lastDay: '2027-11-07', capped: false });
+  });
+
   it('is null without a link', () => {
     expect(
       cfpClosesAt({ ...base, cfp_url: null, timezone: 'UTC', starts_at: '2032-06-10T18:00:00Z', cfp_closes_on: null }),

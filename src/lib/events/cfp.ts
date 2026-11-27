@@ -63,10 +63,14 @@ export function cfpDeadline(e: Pick<PublicEvent, 'cfp_url' | 'cfp_last_day' | 'c
   return `Call for speakers: apply by ${formatLongDate(e.cfp_last_day)}`;
 }
 
-/** Local midnight in a zone; a midnight skipped by a clock change moves to the next valid hour, as Postgres does. */
+/**
+ * Local midnight in a zone, matching PostgreSQL: a midnight that happens
+ * twice (clocks going back) uses the later one, and a midnight skipped by a
+ * clock change moves to the next valid hour.
+ */
 function startOfLocalDay(date: string, timeZone: string): number {
   for (const time of ['00:00', '01:00', '02:00']) {
-    const r = zonedTimeToUtc(date, time, timeZone);
+    const r = zonedTimeToUtc(date, time, timeZone, 'later');
     if (r.ok) return Date.parse(r.instant);
   }
   throw new Error(`No valid start of ${date} in ${timeZone}`);

@@ -245,6 +245,13 @@ describe('call for speakers on the form', () => {
     expect(validateEvent(valid({ cfp_url: url }), { now: NOW }).ok).toBe(true);
   });
 
+  it('stores the link in its standard form, so odd spellings and hidden line breaks never reach the database', () => {
+    const upper = validateEvent(valid({ cfp_url: 'HTTPS://CFP.example/Apply' }), { now: NOW });
+    expect(upper.ok && upper.record.cfp_url).toBe('https://cfp.example/Apply');
+    const sneaky = validateEvent(valid({ cfp_url: 'https://cfp.example/apply\nSTATUS:CANCELLED' }), { now: NOW });
+    expect(sneaky.ok && sneaky.record.cfp_url).not.toMatch(/[\r\n]/);
+  });
+
   it('admins can keep a date that has passed', () => {
     const r = validateEvent(valid({ cfp_url: 'https://cfp.example', cfp_closes_on: '2026-11-25' }), {
       now: NOW,
@@ -256,7 +263,7 @@ describe('call for speakers on the form', () => {
   it('round-trips through the form', () => {
     const r = validateEvent(valid({ cfp_url: 'https://cfp.example', cfp_closes_on: '2026-11-30' }), { now: NOW });
     if (!r.ok) throw new Error('expected valid');
-    expect(recordToForm(r.record)).toMatchObject({ cfp_url: 'https://cfp.example', cfp_closes_on: '2026-11-30' });
+    expect(recordToForm(r.record)).toMatchObject({ cfp_url: 'https://cfp.example/', cfp_closes_on: '2026-11-30' });
     expect(EMPTY_EVENT_FORM).toMatchObject({ cfp_url: '', cfp_closes_on: '' });
   });
 });

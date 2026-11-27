@@ -103,6 +103,21 @@ describe('call for speakers deadline', () => {
     expect(error?.code).toBe('23514');
   });
 
+  it('refuses a link with control characters, however it is written', async () => {
+    const { error } = await db.from('events').insert({
+      slug: `itest-cfp-${uniq()}`,
+      title: 'Bad link',
+      summary: 'A test.',
+      timezone: 'UTC',
+      format: 'online',
+      starts_at: '2032-06-10T18:00:00Z',
+      ends_at: '2032-06-10T20:00:00Z',
+      types: ['talk'],
+      cfp_url: 'https://cfp.example/apply\r\nSTATUS:CANCELLED',
+    });
+    expect(error?.code).toBe('23514');
+  });
+
   it('follows the event when it moves earlier', async () => {
     const r = await insert({ cfp_url: 'https://cfp.example', cfp_closes_on: '2032-06-01' });
     expect(r.cfp_capped).toBe(false);
@@ -120,6 +135,8 @@ describe('call for speakers deadline', () => {
       { timezone: 'Europe/Lisbon', cfp_url: 'https://cfp.example', cfp_closes_on: '2032-05-15' },
       { timezone: 'America/New_York', cfp_url: 'https://cfp.example', cfp_closes_on: null },
       { timezone: 'UTC', cfp_url: 'https://cfp.example', cfp_closes_on: '2032-06-10' },
+      // Midnight happens twice here on 7 November 2027.
+      { timezone: 'America/Havana', cfp_url: 'https://cfp.example', cfp_closes_on: '2027-11-06' },
       {
         timezone: 'Europe/Berlin',
         cfp_url: 'https://cfp.example',

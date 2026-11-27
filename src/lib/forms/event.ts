@@ -315,9 +315,15 @@ export function validateEvent(v: EventFormValues, options: ValidateOptions): Eve
   tooLong('access_notes', 'Access details', v.access_notes, LIMITS.accessNotes);
 
   // Call for speakers (optional)
+  // Stored in its standard form (lower-case https://, no hidden line breaks),
+  // which is also what the database checks and the feeds write out.
+  let cfpUrl: string | null = null;
   if (v.cfp_url) {
-    if (v.cfp_url.length > LIMITS.cfpUrl) errors.cfp_url = 'The link must be 500 characters or fewer';
-    else if (!isHttpsUrl(v.cfp_url)) errors.cfp_url = 'Enter the link in full, starting with https://';
+    if (!isHttpsUrl(v.cfp_url)) errors.cfp_url = 'Enter the link in full, starting with https://';
+    else {
+      cfpUrl = new URL(v.cfp_url).href;
+      if (cfpUrl.length > LIMITS.cfpUrl) errors.cfp_url = 'The link must be 500 characters or fewer';
+    }
   }
   if (v.cfp_closes_on) {
     if (!v.cfp_url) errors.cfp_closes_on = 'Add the link to apply, or remove the date';
@@ -358,8 +364,8 @@ export function validateEvent(v: EventFormValues, options: ValidateOptions): Eve
       hearing_loop: access.has('hearing_loop'),
       remote_attendance: access.has('remote_attendance'),
       access_notes: v.access_notes || null,
-      cfp_url: v.cfp_url || null,
-      cfp_closes_on: v.cfp_url && v.cfp_closes_on ? v.cfp_closes_on : null,
+      cfp_url: cfpUrl,
+      cfp_closes_on: cfpUrl && v.cfp_closes_on ? v.cfp_closes_on : null,
     },
   };
 }

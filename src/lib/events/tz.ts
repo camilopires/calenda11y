@@ -62,7 +62,13 @@ export type ZonedResult =
  * one is used. A time that doesn't exist (clocks going forward) is reported,
  * not silently moved.
  */
-export function zonedTimeToUtc(date: string, time: string, timeZone: string): ZonedResult {
+export function zonedTimeToUtc(
+  date: string,
+  time: string,
+  timeZone: string,
+  /** Which of two possible instants to use when clocks go back. PostgreSQL uses the later one. */
+  repeated: 'earlier' | 'later' = 'earlier',
+): ZonedResult {
   const [y, mo, d] = date.split('-').map(Number) as [number, number, number];
   const [h, mi, sec = 0] = time.split(':').map(Number) as [number, number, number?];
   const wall = Date.UTC(y, mo - 1, d, h, mi, sec);
@@ -74,7 +80,8 @@ export function zonedTimeToUtc(date: string, time: string, timeZone: string): Zo
     if (offsetMinutes(candidate, timeZone) === off) matches.push(candidate);
   }
   if (matches.length === 0) return { ok: false, reason: 'nonexistent' };
-  return { ok: true, instant: new Date(Math.min(...matches)).toISOString() };
+  const pick = repeated === 'later' ? Math.max(...matches) : Math.min(...matches);
+  return { ok: true, instant: new Date(pick).toISOString() };
 }
 
 /** All IANA time zones the runtime knows, plus UTC. */

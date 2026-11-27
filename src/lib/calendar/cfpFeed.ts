@@ -39,7 +39,9 @@ function cfpEvent(e: PublicEvent, siteUrl: string): string[] {
     `DTEND;VALUE=DATE:${dateStamp(addDays(e.cfp_last_day, 1))}`,
     `SUMMARY${e.lang ? `;LANGUAGE=${e.lang}` : ''}:${escapeText(summary)}`,
     `DESCRIPTION:${escapeText(description)}`,
-    `URL:${e.cfp_url}`,
+    // A URL value can't be escaped like text, so control characters are removed:
+    // a line break would otherwise start a new property.
+    `URL:${e.cfp_url.replace(/[\u0000-\u001f\u007f]/g, '')}`,
     'TRANSP:TRANSPARENT',
     'END:VEVENT',
   ];
