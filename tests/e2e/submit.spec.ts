@@ -12,8 +12,10 @@ test.describe('adding an event', () => {
     const page = await context.newPage();
     await ownIp(page);
     const title = `No JS meetup ${uniq()}`;
+    // Its own address: acknowledgements are limited to 3 a day per address.
+    const organiser = `organiser-${uniq()}@example.test`;
     await page.goto('/submit');
-    await fillEventForm(page, { title: `${title} typo` });
+    await fillEventForm(page, { title: `${title} typo`, email: organiser });
     await page.getByRole('button', { name: 'Continue' }).click();
 
     await expect(page.getByRole('heading', { level: 1, name: 'Check your answers' })).toBeVisible();
@@ -41,7 +43,7 @@ test.describe('adding an event', () => {
     // Without JavaScript the spam check can't run, so the event is flagged for a closer look.
     expect(data!.flags).toContain('captcha_unverified');
     const email = sentEmails().find((m) => m.subject === `We've got your event: ${title}`);
-    expect(email?.to).toBe('organiser@example.test');
+    expect(email?.to).toBe(organiser);
   });
 
   test('sending the same answers twice creates one event', async ({ page }) => {

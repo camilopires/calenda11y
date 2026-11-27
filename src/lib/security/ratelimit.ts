@@ -20,6 +20,14 @@ export const LIMITS = {
   adminDraftPerIp: { name: 'admin-draft-ip', limit: 20, windowSeconds: 3600 },
   checkoutPerIp: { name: 'checkout-ip', limit: 20, windowSeconds: 3600 },
   placeSearchPerIp: { name: 'place-search-ip', limit: 30, windowSeconds: 3600 },
+  /** "We've got your event" emails to one address, so the form can't flood an inbox. */
+  submissionAckPerRecipient: { name: 'submit-ack-recipient', limit: 3, windowSeconds: 86_400 },
+  /**
+   * Notices to admins about new submissions and reports, for the whole site.
+   * Counts notices (one email to each admin), not emails. Over the limit the
+   * event or report is still saved and shows in the admin pages.
+   */
+  adminNotifyGlobal: { name: 'admin-notify', limit: 30, windowSeconds: 3600 },
 } as const satisfies Record<string, Limit>;
 
 /**

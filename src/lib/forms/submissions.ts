@@ -6,6 +6,7 @@ import { newSubmissionForAdmins, submissionReceived } from '../email/templates.t
 import { ServiceError } from '../result.ts';
 import type { CaptchaResult } from '../services/captcha.ts';
 import { randomUUID } from 'node:crypto';
+import { LIMITS, allow } from '../security/ratelimit.ts';
 import { randomToken } from '../security/tokens.ts';
 import { localDates } from './answers.ts';
 import { newSlug, type EventRecord, type SubmitterValues } from './event.ts';
@@ -32,9 +33,17 @@ export async function createSubmission(
   const preview = { ...record, id, slug, local_start_date: dates.start, local_end_date: dates.end };
   const prefix = `submit:${nonce}:`;
 
-  const admins = await adminEmails();
+  // Anyone can type any address, so the acknowledgement and the admin
+  // notices are limited; the event itself is always saved.
+  const ackOk = await allow(LIMITS.submissionAckPerRecipient, `submit:${submitter.email.toLowerCase()}`);
+  const notifyOk = await allow(LIMITS.adminNotifyGlobal, 'admin-notify');
+  if (!ackOk) console.info('[submit] acknowledgement limit reached for a recipient; not sending');
+  if (!notifyOk) console.warn('[submit] admin notice limit reached; the event is in the queue without an email');
+  const admins = notifyOk ? await adminEmails() : [];
   const emails = [
-    queued('submission_received', `${prefix}received`, submitter.email, submissionReceived(preview)),
+    ...(ackOk
+      ? [queued('submission_received', `${prefix}received`, submitter.email, submissionReceived(preview))]
+      : []),
     ...admins.map((to) =>
       queued('admin_new_submission', `${prefix}admin:${to}`, to, newSubmissionForAdmins(preview, flags)),
     ),

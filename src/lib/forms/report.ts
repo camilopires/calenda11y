@@ -3,6 +3,7 @@ import { db } from '../db.ts';
 import { queued, sendNow } from '../email/outbox.ts';
 import { reportForAdmins } from '../email/templates.ts';
 import { ServiceError } from '../result.ts';
+import { LIMITS, allow } from '../security/ratelimit.ts';
 import type { FieldErrors } from './errors.ts';
 import { isEmail } from './event.ts';
 
@@ -38,7 +39,10 @@ export async function createReport(
 ): Promise<'created' | 'already_submitted'> {
   const reasonText = REPORT_REASONS[v.reason as ReportReason];
   const prefix = `report:${nonce}:`;
-  const emails = (await adminEmails()).map((to) =>
+  // Shares the site-wide limit on admin notices with new submissions.
+  const notifyOk = await allow(LIMITS.adminNotifyGlobal, 'admin-notify');
+  if (!notifyOk) console.warn('[report] admin notice limit reached; the report is saved without an email');
+  const emails = (notifyOk ? await adminEmails() : []).map((to) =>
     queued('admin_report', `${prefix}${to}`, to, reportForAdmins(event, reasonText, v.details || null)),
   );
   const { error } = await db().rpc('create_report', {
