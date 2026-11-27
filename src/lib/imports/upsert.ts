@@ -13,6 +13,7 @@
  */
 import { db } from '../db.ts';
 import { newSlug } from '../forms/event.ts';
+import { guessTypes } from './normalise.ts';
 import { ServiceError, unwrap, unwrapMaybe } from '../result.ts';
 import { randomToken } from '../security/tokens.ts';
 import type { ImportedEvent, SourceType } from './types.ts';
@@ -56,6 +57,11 @@ export function diffFields(current: Partial<Record<string, unknown>> | null, nex
   return out as Partial<Fields>;
 }
 
+function withGuessedTypes(title: string, type: SourceType): { types: string[]; flags?: string[] } {
+  const types = guessTypes(title, type);
+  return types.length ? { types } : { types, flags: ['needs_type'] };
+}
+
 const addFlag = (flags: string[], flag: string) => (flags.includes(flag) ? flags : [...flags, flag]);
 
 interface Existing extends Partial<Record<string, unknown>> {
@@ -95,6 +101,8 @@ export async function upsertImported(sourceId: string, type: SourceType, item: I
         .insert({
           ...item.fields,
           slug: newSlug(item.fields.title, shortId),
+          // Set once, here; after that a person owns the types (see guessTypes).
+          ...withGuessedTypes(item.fields.title, type),
           status: 'pending',
           source: type,
           source_id: sourceId,

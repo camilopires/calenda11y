@@ -65,6 +65,37 @@ afterAll(async () => {
   }
 });
 
+describe('types of imported events', () => {
+  it('guesses types from the title, and flags events it could not classify', async () => {
+    const source = await makeSource();
+    await runImport(
+      source,
+      later(),
+      ctxFor([
+        calendar(
+          vevent('typed', 'Accessibility Workshop', '20270410T100000Z'),
+          vevent('untyped', 'Accessibility evening', '20270411T100000Z'),
+        ),
+      ]),
+    );
+    const rows = (await db.from('events').select('source_uid,types,flags').eq('source_id', source.id)).data!;
+    const by = Object.fromEntries(rows.map((r) => [r.source_uid, r]));
+    expect(by.typed).toMatchObject({ types: ['workshop'] });
+    expect(by.typed!.flags).not.toContain('needs_type');
+    expect(by.untyped).toMatchObject({ types: [] });
+    expect(by.untyped!.flags).toContain('needs_type');
+  });
+
+  it('never proposes a type change when the source renames an event', async () => {
+    const source = await makeSource();
+    await runImport(source, later(), ctxFor([calendar(vevent('r', 'Accessibility Workshop', '20270412T100000Z'))]));
+    await runImport(source, later(), ctxFor([calendar(vevent('r', 'Accessibility Conference', '20270412T100000Z'))]));
+    const row = (await db.from('events').select('types,pending_changes').eq('source_id', source.id).single()).data!;
+    // Still pending, so the title changed directly; the type an admin may have set is left alone.
+    expect(row.types).toEqual(['workshop']);
+  });
+});
+
 describe('importing a feed', () => {
   let source: ImportSource;
   beforeAll(async () => {

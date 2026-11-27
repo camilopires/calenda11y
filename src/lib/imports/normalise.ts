@@ -2,7 +2,29 @@
 import sanitizeHtml from 'sanitize-html';
 import { isCountryCode } from '../events/predicates.ts';
 import { isValidTimeZone } from '../events/tz.ts';
-import type { ImportSource, ImportedEvent, RawEvent } from './types.ts';
+import { EVENT_TYPES, type EventType } from '../events/model.ts';
+import type { ImportSource, ImportedEvent, RawEvent, SourceType } from './types.ts';
+
+/** Whole words in a title that suggest a type of event. */
+const TYPE_WORDS: Record<Exclude<EventType, 'other'>, RegExp> = {
+  conference: /\b(conference|summit|conf)\b/i,
+  meetup: /\b(meetup|meet-up)\b/i,
+  workshop: /\bworkshops?\b/i,
+  talk: /\b(webinar|talk|lecture)s?\b/i,
+  training: /\b(course|training|bootcamp)s?\b/i,
+};
+
+/**
+ * A best guess at an imported event's types, from its source and title.
+ * Empty when nothing matches: the event is then flagged for a person to
+ * choose. Never used after an event is first added, so admins own types.
+ */
+export function guessTypes(title: string, source: SourceType): EventType[] {
+  const found = new Set<EventType>();
+  if (source === 'meetup') found.add('meetup');
+  for (const [type, words] of Object.entries(TYPE_WORDS)) if (words.test(title)) found.add(type as EventType);
+  return EVENT_TYPES.filter((t) => found.has(t));
+}
 
 /** Strips all markup, keeping paragraph breaks. */
 export function toPlainText(html: string | null | undefined): string {
