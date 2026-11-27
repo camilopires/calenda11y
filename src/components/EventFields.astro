@@ -84,8 +84,10 @@ const zones = timeZones();
       { value: 'all_day', label: 'No, it runs all day', hint: 'For example a conference that runs over whole days.' },
     ]}
   />
+  {/* Most events happen on one day, so that's the default: one date, then the
+      times on one line. A later end date is tucked away until it's needed. */}
+  <Field name="start_date" label="Date" type="date" value={v.start_date} error={e.start_date} required />
   <div class="filters__grid filters__grid--pair">
-    <Field name="start_date" label="Start date" type="date" value={v.start_date} error={e.start_date} required />
     <Field
       name="start_time"
       label="Start time"
@@ -94,14 +96,6 @@ const zones = timeZones();
       error={e.start_time}
       hint="Leave blank if it runs all day."
       showOptional={false}
-    />
-    <Field
-      name="end_date"
-      label="End date"
-      type="date"
-      value={v.end_date}
-      error={e.end_date}
-      hint="Leave blank if it ends on the same day."
     />
     <Field
       name="end_time"
@@ -113,6 +107,17 @@ const zones = timeZones();
       showOptional={false}
     />
   </div>
+  <details class="form-more" open={!!v.end_date || !!e.end_date}>
+    <summary>It runs over more than one day</summary>
+    <Field
+      name="end_date"
+      label="End date"
+      type="date"
+      value={v.end_date}
+      error={e.end_date}
+      hint="The last day of the event. Leave blank if it ends on the same day."
+    />
+  </details>
   <Field
     name="timezone"
     label="Time zone"

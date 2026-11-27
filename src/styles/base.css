@@ -675,6 +675,10 @@ input[type='radio'] {
   margin-block-start: var(--space-4);
 }
 
+.form-more > summary + * {
+  margin-block-start: var(--space-3);
+}
+
 summary {
   cursor: pointer;
   font-weight: 700;

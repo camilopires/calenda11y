@@ -216,7 +216,7 @@ export function validateEvent(v: EventFormValues, options: ValidateOptions): Eve
   const allDay = v.timing === 'all_day';
   if (v.timing !== 'timed' && v.timing !== 'all_day')
     errors.timing = 'Choose whether the event has start and end times';
-  if (!v.start_date) errors.start_date = 'Enter the date the event starts';
+  if (!v.start_date) errors.start_date = 'Enter the date of the event';
   else if (!isIsoDate(v.start_date)) errors.start_date = 'Enter the start date as a real date';
   const endDate = v.end_date || v.start_date;
   if (v.end_date && !isIsoDate(v.end_date)) errors.end_date = 'Enter the end date as a real date';

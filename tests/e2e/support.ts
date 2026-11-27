@@ -77,7 +77,7 @@ export async function fillEventForm(
   await page.getByLabel('Who is running it').fill('Test Org');
   await page.getByLabel('Event website').fill('https://example.org/event');
   await page.getByRole('radio', { name: 'Yes, it has times' }).check();
-  await page.getByLabel('Start date').fill(o.startDate ?? inDays(20));
+  await page.getByLabel('Date', { exact: true }).fill(o.startDate ?? inDays(20));
   await page.getByLabel('Start time').fill('18:30');
   await page.getByLabel('End time').fill('20:00');
   await page.getByLabel('Time zone').selectOption('Europe/Lisbon');

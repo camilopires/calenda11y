@@ -1,5 +1,5 @@
 import { expect, expectNoAxeViolations, expectValidHtml, test } from '../a11y/fixtures.ts';
-import { clearOutbox, fillEventForm, ownIp, sentEmails, service, uniq } from './support.ts';
+import { clearOutbox, fillEventForm, inDays, ownIp, sentEmails, service, uniq } from './support.ts';
 
 test.describe('adding an event', () => {
   test.beforeEach(async ({ page }) => {
@@ -104,6 +104,36 @@ test.describe('adding an event', () => {
     await expect(page).toHaveTitle(/^Error: Sponsor calenda11y/);
     await page.goto('/');
     await expect(page).not.toHaveTitle(/^Error/);
+  });
+
+  test('a one-day event needs one date, with start and end times on one line', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/submit');
+    const top = async (label: string) => (await page.getByLabel(label, { exact: true }).boundingBox())!.y;
+    expect(await top('Start time')).toBe(await top('End time'));
+    expect(await top('Date')).toBeLessThan(await top('Start time'));
+    // The end date is tucked away until it's needed.
+    const more = page.locator('details', { has: page.getByText('It runs over more than one day') });
+    await expect(more).not.toHaveAttribute('open');
+    await expect(page.getByLabel('End date')).toBeHidden();
+    await more.locator('summary').click();
+    await expect(page.getByLabel('End date')).toBeVisible();
+  });
+
+  test('an end date that was entered, or has an error, keeps its section open', async ({ page }) => {
+    await page.goto('/submit');
+    await page.getByLabel('Date', { exact: true }).fill(inDays(20));
+    await page.locator('summary', { hasText: 'It runs over more than one day' }).click();
+    // Before the start date, so it has an error.
+    await page.getByLabel('End date').fill(inDays(10));
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByLabel('End date')).toBeVisible();
+    await page
+      .locator('.error-summary')
+      .getByRole('link', { name: 'The end date must be the same as or after the start date' })
+      .first()
+      .click();
+    await expect(page.getByLabel('End date')).toBeFocused();
   });
 
   test('a tampered check page is refused', async ({ page }) => {
