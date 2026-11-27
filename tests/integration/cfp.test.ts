@@ -1,5 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { cfpClosesAt } from '../../src/lib/events/cfp.ts';
+import { parseFilters } from '../../src/lib/events/predicates.ts';
+import { listAllEvents } from '../../src/lib/events/query.ts';
 import { service } from './helpers.ts';
 
 const db = service();
@@ -155,6 +157,21 @@ describe('call for speakers deadline', () => {
       .eq('id', r.id)
       .single();
     expect(view.data).toMatchObject({ cfp_url: 'https://cfp.example/new', cfp_capped: true });
+  });
+});
+
+describe('the "Open for speakers" filter', () => {
+  it('leaves out cancelled events, and includes them again once restored', async () => {
+    const r = await insert({ status: 'approved', cfp_url: 'https://cfp.example', cfp_closes_on: '2032-05-01' });
+    const open = async () =>
+      (await listAllEvents(parseFilters(new URLSearchParams('cfp=open&type=conference')).filters)).some(
+        (e) => e.id === r.id,
+      );
+    expect(await open()).toBe(true);
+    await db.from('events').update({ status: 'cancelled' }).eq('id', r.id);
+    expect(await open()).toBe(false);
+    await db.from('events').update({ status: 'approved' }).eq('id', r.id);
+    expect(await open()).toBe(true);
   });
 });
 

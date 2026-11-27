@@ -150,6 +150,52 @@ test.describe('event pages', () => {
     await expect(page.locator('#results-count')).toContainText('in May 2031');
   });
 
+  test('"Open for speakers" works without JavaScript and leaves out closed calls', async ({ browser, baseURL }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false, baseURL: baseURL! });
+    const page = await context.newPage();
+    await page.goto('/');
+    await page.getByRole('checkbox', { name: 'Open for speakers' }).check();
+    await page.getByRole('button', { name: 'Show events' }).click();
+    await expect(page).toHaveURL(/[?&]cfp=open/);
+    await expect(page.locator('#results-count')).toContainText('with an open call for speakers');
+    await expect(page.getByRole('link', { name: 'Tokyo Web Accessibility Night' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Nordic Accessibility Summit' })).toBeVisible();
+    // Its call closed a few days ago.
+    await expect(page.getByRole('link', { name: 'WCAG 2.2 in practice' })).toHaveCount(0);
+    await context.close();
+  });
+
+  test('cards say when a call for speakers closes, in words', async ({ page }) => {
+    await page.goto('/?cfp=open');
+    const nordic = page.locator('.event', { hasText: 'Nordic Accessibility Summit' });
+    await expect(nordic.locator('.badge', { hasText: 'Call for speakers' })).toHaveText(
+      /^Call for speakers closes soon: \d+ \w{3}$/,
+    );
+    const tokyo = page.locator('.event', { hasText: 'Tokyo Web Accessibility Night' });
+    await expect(tokyo.locator('.badge', { hasText: 'Call for speakers' })).toHaveText(
+      /^Call for speakers open until \d+ \w{3}$/,
+    );
+    await page.goto('/?type=training');
+    const closed = page.locator('.event', { hasText: 'WCAG 2.2 in practice' });
+    await expect(closed.locator('.badge', { hasText: 'Call for speakers' })).toHaveText('Call for speakers closed');
+  });
+
+  test('the event page explains the call for speakers and links to it', async ({ page }) => {
+    await page.goto('/events/tokyo-web-accessibility-night');
+    const section = page.getByRole('region', { name: 'Call for speakers' });
+    await expect(section).toContainText(/open until the end of \w+day \d+ \w+ \d{4}\./);
+    await expect(
+      section.getByRole('link', { name: 'Apply to speak at Tokyo Web Accessibility Night' }),
+    ).toHaveAttribute('href', 'https://example.org/tokyo/speak');
+    await page.goto('/events/nairobi-inclusive-tech-day');
+    await expect(page.getByRole('region', { name: 'Call for speakers' })).toContainText('open until the event starts');
+    await page.goto('/events/wcag-22-in-practice');
+    await expect(page.getByRole('region', { name: 'Call for speakers' })).toContainText(
+      'The call for speakers closed on',
+    );
+    await expectNoAxeViolations(page, 'event with closed call');
+  });
+
   test('access provision filters need every chosen provision', async ({ page }) => {
     await page.goto('/?access=sign_language&access=quiet_room');
     const titles = await page.locator('.event__title').allTextContents();

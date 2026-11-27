@@ -568,6 +568,12 @@ input[type='radio'] {
   background: var(--c-surface);
 }
 
+/* A call for speakers closing within a week: the words say so; the heavier border is extra. */
+.badge--soon {
+  border-color: var(--c-text);
+  border-width: var(--border-width);
+}
+
 .badge--cancelled {
   border-color: var(--c-error);
   color: var(--c-error);
@@ -680,7 +686,7 @@ input[type='radio'] {
 
 @media (min-width: 72em) {
   .filters__kinds {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
   }
 }
 
@@ -988,10 +994,11 @@ svg {
 }
 
 /* Links that stand alone (not inside a sentence) get a full-size target (2.5.5). */
+/* Inline-block (not flex), so text and any <span> inside wrap together. */
 .link-standalone {
-  display: inline-flex;
-  align-items: center;
+  display: inline-block;
   min-block-size: var(--target-min);
+  padding-block: max(0px, calc((var(--target-min) - 1lh) / 2));
 }
 
 .bare-list {

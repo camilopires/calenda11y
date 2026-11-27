@@ -139,6 +139,14 @@ if (monthChosen && !months.some((m) => m.value === values.range)) {
       error={errors.type}
       options={EVENT_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }))}
     />
+    <ChoiceGroup
+      name="cfp"
+      legend="Speaking"
+      type="checkbox"
+      value={values.cfp ? ['open'] : []}
+      error={errors.cfp}
+      options={[{ value: 'open', label: 'Open for speakers' }]}
+    />
   </div>
 
   <details class="filters__more" open={moreActive}>

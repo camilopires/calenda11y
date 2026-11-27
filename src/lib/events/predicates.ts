@@ -34,6 +34,8 @@ export interface Filters {
   formats: Format[];
   /** Any of these types (empty: no type filter). */
   types: EventType[];
+  /** Only events whose call for speakers is still open. */
+  cfp?: true;
   range: Range;
   /** YYYY-MM, only for range = month. */
   month?: string;
@@ -55,6 +57,7 @@ export interface FilterValues {
   country: string;
   formats: string[];
   types: string[];
+  cfp: boolean;
   range: string;
   from: string;
   to: string;
@@ -86,6 +89,7 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
     country: (params.get('country') ?? '').trim(),
     formats: params.getAll('format'),
     types: params.getAll('type'),
+    cfp: params.get('cfp') === 'open',
     range: params.get('range') ?? '',
     from: params.get('from') ?? '',
     to: params.get('to') ?? '',
@@ -112,6 +116,10 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
     errors.type = 'Choose a type from the list';
   }
   filters.types = EVENT_TYPES.filter((t) => values.types.includes(t));
+
+  const cfp = params.get('cfp');
+  if (cfp === 'open') filters.cfp = true;
+  else if (cfp !== null && cfp !== '') errors.cfp = 'Choose "Open for speakers" or leave it unticked';
 
   if (values.range) {
     if ((RANGES as readonly string[]).includes(values.range)) filters.range = values.range as Range;
@@ -179,7 +187,7 @@ export function parseFilters(params: URLSearchParams): ParsedFilters {
     else errors.page = 'That page number does not exist';
   }
 
-  const active = ['country', 'format', 'type', 'range', 'from', 'to', 'price', 'access', 'q'].some((k) =>
+  const active = ['country', 'format', 'type', 'cfp', 'range', 'from', 'to', 'price', 'access', 'q'].some((k) =>
     params.has(k),
   );
   return { filters, values, errors, active };
@@ -230,6 +238,8 @@ export function applyFilters<Q extends FilterableQuery>(query: Q, filters: Filte
   const formats = effectiveFormats(filters);
   if (formats) q = q.in('format', formats);
   if (filters.types.length) q = q.overlaps('types', filters.types);
+  // Cancelled events are public too, but their calls aren't open.
+  if (filters.cfp) q = q.gt('cfp_closes_at', now).eq('status', 'approved');
 
   if (filters.when === 'past') q = q.lt('end_instant', now);
   else if (filters.when === 'upcoming') q = q.gt('end_instant', now);
@@ -255,6 +265,7 @@ export function filtersToParams(
   if (filters.country) p.set('country', filters.country);
   for (const f of filters.formats) p.append('format', f);
   for (const t of filters.types) p.append('type', t);
+  if (filters.cfp) p.set('cfp', 'open');
   if (filters.range === 'month') {
     if (filters.month) p.set('range', filters.month);
   } else if (filters.range !== 'upcoming') p.set('range', filters.range);
@@ -283,6 +294,7 @@ export function describeFilters(filters: Filters): string {
   parts.push(text);
   if (filters.access.length)
     parts.push(`with ${filters.access.map((a) => ACCESS_LABELS[a].toLowerCase()).join(' and ')}`);
+  if (filters.cfp) parts.push('with an open call for speakers');
   if (filters.q) parts.push(`matching “${filters.q}”`);
   const window =
     filters.range === 'custom'

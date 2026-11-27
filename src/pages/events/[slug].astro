@@ -13,6 +13,7 @@ import {
   countryName,
 } from '../../lib/events/model';
 import { getEventBySlug } from '../../lib/events/query';
+import { cfpSentence } from '../../lib/events/cfp';
 
 const event = await getEventBySlug(Astro.params.slug ?? '');
 if (!event) return Astro.rewrite('/404');
@@ -21,6 +22,7 @@ const provisions = accessProvisions(event);
 const ended = new Date(event.end_instant).getTime() < Date.now();
 const cancelled = event.status === 'cancelled';
 const country = event.country_code ? countryName(event.country_code) : null;
+const cfpText = cfpSentence(event, new Date());
 ---
 
 <BaseLayout
@@ -101,6 +103,18 @@ const country = event.country_code ? countryName(event.country_code) : null;
       </dl>
       {!event.all_day && <TimeZoneToggle />}
     </section>
+
+    {cfpText && event.cfp_url && (
+      <section aria-labelledby="cfp" class="flow">
+        <h2 id="cfp">Call for speakers</h2>
+        <p>{cfpText}</p>
+        <p>
+          <a class="link-standalone" href={event.cfp_url} rel="nofollow ugc">
+            Apply to speak at <span lang={event.lang}>{event.title}</span>
+          </a>
+        </p>
+      </section>
+    )}
 
     <section aria-labelledby="access" class="flow">
       <h2 id="access">Access</h2>

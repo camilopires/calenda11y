@@ -267,3 +267,24 @@ describe('month filter', () => {
     expect(describeFilters(parse('range=2027-01&type=conference').filters)).toBe('conferences in January 2027');
   });
 });
+
+describe('open for speakers filter', () => {
+  it('reads cfp=open, and refuses anything else', () => {
+    expect(parse('cfp=open').filters.cfp).toBe(true);
+    expect(parse('cfp=yes').errors.cfp).toBe('Choose "Open for speakers" or leave it unticked');
+  });
+
+  it('only matches published events whose call has not closed', () => {
+    const r = new Recorder();
+    applyFilters(r, parse('cfp=open').filters, '2026-11-27T12:00:00Z', '2026-11-27');
+    expect(r.calls).toContainEqual(['gt', 'cfp_closes_at', '2026-11-27T12:00:00Z']);
+    expect(r.calls).toContainEqual(['eq', 'status', 'approved']);
+  });
+
+  it('round-trips, counts as active, and is described', () => {
+    const p = parse('cfp=open&type=conference');
+    expect(p.active).toBe(true);
+    expect(filtersToParams(p.filters).get('cfp')).toBe('open');
+    expect(describeFilters(p.filters)).toBe('conferences with an open call for speakers');
+  });
+});

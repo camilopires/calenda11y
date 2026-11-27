@@ -1,5 +1,6 @@
 ---
 import EventTime from './EventTime.astro';
+import { cfpBadge, cfpStatus } from '../lib/events/cfp';
 import { dateBlockParts } from '../lib/events/dates';
 import {
   ACCESS_LABELS,
@@ -25,6 +26,7 @@ const where =
       (event.format === 'hybrid' ? ', and online' : '');
 const provisions = accessProvisions(event);
 const cancelled = event.status === 'cancelled';
+const cfp = cfpStatus(event, new Date());
 ---
 
 <article class="event" aria-labelledby={`ev-${event.id}`}>
@@ -53,6 +55,7 @@ const cancelled = event.status === 'cancelled';
       {event.types.map((ty) => (
         <li class="badge">{TYPE_LABELS[ty]}</li>
       ))}
+      {cfp && <li class:list={['badge', { 'badge--soon': cfp.state === 'soon' }]}>{cfpBadge(cfp)}</li>}
       <li class="badge">{FORMAT_LABELS[event.format]}</li>
       <li class="badge">{PRICE_LABELS[event.price]}</li>
       {provisions.map((p) => (
