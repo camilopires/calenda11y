@@ -15,6 +15,7 @@ const FLAG_LABELS: Record<string, string> = {
   missing_from_source: 'Missing from source',
   captcha_unverified: 'Spam check not passed',
   cancel_requested: 'Source says cancelled',
+  needs_type: 'Needs a type',
 };
 const requested = Astro.url.searchParams.get('view') ?? 'pending';
 const view: QueueView = requested in QUEUE_VIEWS ? (requested as QueueView) : 'pending';
@@ -42,6 +43,9 @@ const canBulk = view === 'pending' && events.length > 0;
       <p>
         {notices[notice]}
         {notice === 'bulk' && Astro.url.searchParams.get('n') ? ` ${Astro.url.searchParams.get('n')} published.` : ''}
+        {notice === 'bulk' && Number(Astro.url.searchParams.get('untyped')) > 0
+          ? ` ${Number(Astro.url.searchParams.get('untyped'))} still need a type before they can be published.`
+          : ''}
       </p>
     </div>
   )}

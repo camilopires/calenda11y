@@ -40,6 +40,7 @@ function eventPayload(overrides: Record<string, unknown> = {}) {
     remote_attendance: false,
     access_notes: null,
     flags: [],
+    types: ['talk'],
     ...overrides,
   };
 }

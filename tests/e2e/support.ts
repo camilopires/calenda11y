@@ -70,10 +70,13 @@ export const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISO
 /** Fills in the event form fields (works with or without JavaScript). */
 export async function fillEventForm(
   page: Page,
-  o: { title: string; online?: boolean; email?: string; startDate?: string } = { title: 'Test event' },
+  o: { title: string; online?: boolean; email?: string; startDate?: string; types?: string[] } = {
+    title: 'Test event',
+  },
 ): Promise<void> {
   await page.getByLabel('Event name').fill(o.title);
   await page.getByLabel('Summary').fill('A friendly evening about accessible design.');
+  for (const t of o.types ?? ['Meetup']) await page.getByRole('checkbox', { name: t, exact: true }).check();
   await page.getByLabel('Who is running it').fill('Test Org');
   await page.getByLabel('Event website').fill('https://example.org/event');
   await page.getByRole('radio', { name: 'Yes, it has times' }).check();
@@ -91,4 +94,28 @@ export async function fillEventForm(
   await page.getByRole('radio', { name: 'Yes, it is free' }).check();
   await page.getByRole('checkbox', { name: 'Live captions' }).check();
   await page.getByLabel('Your email address').fill(o.email ?? 'organiser@example.test');
+}
+
+/** Adds a pending event straight to the database, as an import does, with no type unless given. */
+export async function insertPendingEvent(title: string, fields: Record<string, unknown> = {}): Promise<string> {
+  const { data, error } = await service()
+    .from('events')
+    .insert({
+      slug: `pending-${uniq()}`,
+      title,
+      summary: 'Added for a test.',
+      timezone: 'UTC',
+      format: 'online',
+      starts_at: `${inDays(30)}T10:00:00Z`,
+      ends_at: `${inDays(30)}T11:00:00Z`,
+      url: 'https://example.org/pending',
+      organiser: 'Test Org',
+      status: 'pending',
+      flags: ['needs_type'],
+      ...fields,
+    })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data!.id;
 }

@@ -3,7 +3,14 @@ import Field from './Field.astro';
 import ChoiceGroup from './ChoiceGroup.astro';
 import type { FieldErrors } from '../lib/forms/errors';
 import { LANGUAGES, LIMITS, languageName, type EventFormValues } from '../lib/forms/event';
-import { ACCESS_LABELS, ACCESS_PROVISIONS, FORMAT_LABELS, FORMATS } from '../lib/events/model';
+import {
+  ACCESS_LABELS,
+  ACCESS_PROVISIONS,
+  EVENT_TYPES,
+  FORMAT_LABELS,
+  FORMATS,
+  TYPE_LABELS,
+} from '../lib/events/model';
 import { allCountries } from '../lib/events/countries';
 import { timeZones } from '../lib/events/tz';
 
@@ -29,6 +36,17 @@ const zones = timeZones();
     required
     maxlength={LIMITS.summary}
     hint="One or two short sentences in plain language, saying what the event is and who it's for. Up to 280 characters."
+  />
+  <ChoiceGroup
+    name="type"
+    legend="What kind of event is it?"
+    hint="Choose all that apply."
+    type="checkbox"
+    required
+    inline
+    value={v.types}
+    error={e.type}
+    options={EVENT_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }))}
   />
   <Field
     name="description"

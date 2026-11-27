@@ -3,7 +3,16 @@
  * Messages follow one pattern: say what to do, in plain words.
  */
 import type { FieldErrors } from './errors.ts';
-import { ACCESS_PROVISIONS, FORMATS, PRICES, type AccessProvision, type Format, type Price } from '../events/model.ts';
+import {
+  ACCESS_PROVISIONS,
+  EVENT_TYPES,
+  FORMATS,
+  PRICES,
+  type AccessProvision,
+  type EventType,
+  type Format,
+  type Price,
+} from '../events/model.ts';
 import { addDays, isIsoDate } from '../events/dates.ts';
 import { isCountryCode } from '../events/predicates.ts';
 import { isValidTimeZone, zonedTimeToUtc } from '../events/tz.ts';
@@ -72,6 +81,7 @@ export interface EventFormValues {
   end_time: string;
   timezone: string;
   format: string;
+  types: string[];
   country: string;
   city: string;
   venue: string;
@@ -100,6 +110,7 @@ export interface EventRecord {
   end_date: string | null;
   timezone: string;
   format: Format;
+  types: EventType[];
   country_code: string | null;
   city: string | null;
   venue: string | null;
@@ -133,6 +144,7 @@ export function readEventForm(form: FormData): EventFormValues {
     end_time: str(form, 'end_time'),
     timezone: str(form, 'timezone'),
     format: str(form, 'format'),
+    types: form.getAll('type').filter((v): v is string => typeof v === 'string'),
     country: str(form, 'country').toUpperCase(),
     city: str(form, 'city'),
     venue: str(form, 'venue'),
@@ -160,6 +172,7 @@ export const EMPTY_EVENT_FORM: EventFormValues = {
   end_time: '',
   timezone: '',
   format: '',
+  types: [],
   country: '',
   city: '',
   venue: '',
@@ -266,6 +279,11 @@ export function validateEvent(v: EventFormValues, options: ValidateOptions): Eve
     }
   }
 
+  // What kind of event
+  const types = EVENT_TYPES.filter((t) => v.types.includes(t));
+  if (v.types.some((t) => !(EVENT_TYPES as readonly string[]).includes(t))) errors.type = 'Choose types from the list';
+  else if (!types.length) errors.type = 'Choose at least one type of event';
+
   // Where
   if (!(FORMATS as readonly string[]).includes(v.format)) errors.format = 'Choose how people can attend';
   const online = v.format === 'online';
@@ -303,6 +321,7 @@ export function validateEvent(v: EventFormValues, options: ValidateOptions): Eve
       end_date: endDateExclusive,
       timezone: v.timezone,
       format: v.format as Format,
+      types,
       country_code: online ? null : v.country,
       city: online ? null : v.city || null,
       venue: online ? null : v.venue || null,
@@ -374,6 +393,7 @@ export function recordToForm(e: EventRecord & { local_end_date?: string }): Even
     end_time: !e.all_day && e.ends_at ? timeIn(e.ends_at) : '',
     timezone: e.timezone,
     format: e.format,
+    types: [...(e.types ?? [])],
     country: e.country_code ?? '',
     city: e.city ?? '',
     venue: e.venue ?? '',

@@ -50,6 +50,31 @@ select
   'UTC', 'online', 'https://example.org/talk-' || n, 'A11y Talks Online', 'free', true, 'approved'
 from generate_series(1, 30) as n;
 
+-- Event types (an event can have several).
+update public.events e set types = t.types::public.event_type[]
+from (values
+  ('lisbon-inclusive-design-meetup', '{meetup,talk}'),
+  ('screen-reader-testing-basics', '{workshop}'),
+  ('berlin-a11y-stammtisch', '{meetup}'),
+  ('accessible-pdfs-clinic', '{workshop}'),
+  ('toronto-a11y-camp', '{conference}'),
+  ('cognitive-accessibility-panel', '{talk}'),
+  ('sydney-a11y-meetup', '{meetup}'),
+  ('tokyo-web-accessibility-night', '{meetup}'),
+  ('nairobi-inclusive-tech-day', '{conference,workshop}'),
+  ('design-systems-and-a11y', '{talk}'),
+  ('sao-paulo-acessibilidade-digital', '{meetup}'),
+  ('wcag-22-in-practice', '{training}'),
+  ('multi-day-a11y-summit', '{conference,workshop}'),
+  ('cancelled-meetup-paris', '{meetup}'),
+  ('pending-event-not-public', '{other}'),
+  ('rejected-event-not-public', '{other}'),
+  ('past-event-lisbon', '{meetup}')
+) as t(slug, types)
+where e.slug = t.slug;
+
+update public.events set types = '{talk}' where slug like 'online-a11y-talk-%';
+
 insert into public.events_private (event_id, submitter_email, submitter_name)
 select id, 'organiser+' || slug || '@example.org', 'Seed organiser'
 from public.events;

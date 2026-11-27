@@ -5,7 +5,14 @@ import ErrorSummary from '../../../components/ErrorSummary.astro';
 import EventFields from '../../../components/EventFields.astro';
 import Field from '../../../components/Field.astro';
 import { requireAdmin, takeDraft } from '../../../lib/admin/auth';
-import { VersionConflict, getAdminEvent, moderate, saveEvent, type ModerationAction } from '../../../lib/admin/events';
+import {
+  NeedsTypeError,
+  VersionConflict,
+  getAdminEvent,
+  moderate,
+  saveEvent,
+  type ModerationAction,
+} from '../../../lib/admin/events';
 import { acceptPendingChanges, discardPendingChanges } from '../../../lib/imports/upsert';
 import { describeWhen } from '../../../lib/events/dates';
 import { readEventForm, recordToForm, validateEvent, type EventFormValues } from '../../../lib/forms/event';
@@ -105,13 +112,18 @@ if (form) {
       );
     }
   } catch (err) {
-    if (!(err instanceof VersionConflict)) throw err;
-    general.push(
-      'Someone else changed this event while you were working on it. The latest version is shown below. Check it, then make your change again.',
-    );
-    detail = (await getAdminEvent(id))!;
-    version = detail.event.version;
-    if (step !== 'save') values = recordToForm(detail.event);
+    if (err instanceof NeedsTypeError) {
+      // Nothing changed: ask for a type in the details form below.
+      errors = { type: 'Add at least one type before publishing. Choose it below, then save.' };
+    } else if (!(err instanceof VersionConflict)) throw err;
+    else {
+      general.push(
+        'Someone else changed this event while you were working on it. The latest version is shown below. Check it, then make your change again.',
+      );
+      detail = (await getAdminEvent(id))!;
+      version = detail.event.version;
+      if (step !== 'save') values = recordToForm(detail.event);
+    }
   }
 }
 

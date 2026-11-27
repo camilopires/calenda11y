@@ -1,5 +1,6 @@
 /** Turns checked event values into "Check your answers" rows. */
 import {
+  TYPE_LABELS,
   ACCESS_LABELS,
   FORMAT_LABELS,
   PRICE_LABELS,
@@ -29,6 +30,7 @@ export function eventAnswerRows(v: EventFormValues, r: EventRecord, localStart: 
   return [
     { label: 'Event name', value: r.title, field: fieldId('title'), lang: r.lang },
     { label: 'Summary', value: r.summary, field: fieldId('summary'), lang: r.lang },
+    { label: 'Type', value: r.types.map((t) => TYPE_LABELS[t]), field: fieldId('type') },
     { label: 'More details', value: r.description ?? '', field: fieldId('description'), lang: r.lang },
     { label: 'Language', value: languageName(r.lang), field: fieldId('lang') },
     { label: 'Who is running it', value: r.organiser, field: fieldId('organiser') },

@@ -1,7 +1,7 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { requireAdmin } from '../../lib/admin/auth';
-import { VersionConflict, getAdminEvent, moderate } from '../../lib/admin/events';
+import { NeedsTypeError, VersionConflict, blockedForType, getAdminEvent, moderate } from '../../lib/admin/events';
 import { describeWhen } from '../../lib/events/dates';
 
 const guard = await requireAdmin(Astro);
@@ -17,9 +17,13 @@ const selected = guard.form
   .slice(0, 100)
   .map((m) => ({ id: m[1]!, version: Number(m[2]) }));
 
-const details = (await Promise.all(selected.map(async (s) => ({ ...s, detail: await getAdminEvent(s.id) })))).filter(
+const pending = (await Promise.all(selected.map(async (s) => ({ ...s, detail: await getAdminEvent(s.id) })))).filter(
   (d) => d.detail && d.detail.event.status === 'pending',
 );
+// Events that have never been published need a type first; they're listed, not published.
+// Both steps use the same rule, so a confirm sent without the check page skips them too.
+const details = pending.filter((d) => !blockedForType(d.detail!.event, 'approve'));
+const untyped = pending.filter((d) => blockedForType(d.detail!.event, 'approve'));
 
 const conflicts: string[] = [];
 if (step === 'confirm' && details.length) {
@@ -29,21 +33,37 @@ if (step === 'confirm' && details.length) {
       await moderate(d.detail!, 'approve', d.version);
       published++;
     } catch (err) {
-      if (err instanceof VersionConflict) conflicts.push(d.detail!.event.title);
+      if (err instanceof VersionConflict || err instanceof NeedsTypeError) conflicts.push(d.detail!.event.title);
       else throw err;
     }
   }
-  if (!conflicts.length) return Astro.redirect(`/admin?done=bulk&n=${published}`, 303);
+  if (!conflicts.length && !untyped.length) return Astro.redirect(`/admin?done=bulk&n=${published}`, 303);
+  if (!conflicts.length) return Astro.redirect(`/admin?done=bulk&n=${published}&untyped=${untyped.length}`, 303);
 }
 ---
 
 <AdminLayout title="Publish events" admin={guard.admin} current="queue">
+  {untyped.length > 0 && (
+    <div class="notice notice--important flow-tight">
+      <h2 class="small">Can't publish yet: no type</h2>
+      <p>Open each of these and choose what kind of event it is. They stay waiting for review.</p>
+      <ul>
+        {untyped.map((d) => (
+          <li>
+            <a href={`/admin/events/${d.id}`} lang={d.detail!.event.lang}>
+              {d.detail!.event.title}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )}
   {details.length === 0 ? (
     <div class="page-head flow">
       <h1 tabindex="-1" data-focus-on-load>
-        No events chosen
+        {untyped.length ? 'None of these can be published yet' : 'No events chosen'}
       </h1>
-      <p>Go back and tick the events you want to publish.</p>
+      <p>{untyped.length ? 'Each one needs a type first.' : 'Go back and tick the events you want to publish.'}</p>
       <p>
         <a class="link-standalone" href="/admin">
           Go back to the review list

@@ -4,6 +4,7 @@ import {
   isEmail,
   isHttpsUrl,
   newSlug,
+  readEventForm,
   recordToForm,
   slugify,
   validateEvent,
@@ -29,7 +30,36 @@ const valid = (overrides: Partial<EventFormValues> = {}): EventFormValues => ({
   city: 'Lisbon',
   price: 'free',
   access: ['captions', 'step_free'],
+  types: ['meetup', 'talk'],
   ...overrides,
+});
+
+describe('event types on the form', () => {
+  it('keeps the chosen types, once each, in the order of the list', () => {
+    const r = validateEvent(valid({ types: ['talk', 'meetup', 'talk'] }), { now: NOW });
+    expect(r.ok && r.record.types).toEqual(['meetup', 'talk']);
+  });
+
+  it('needs at least one type', () => {
+    const r = validateEvent(valid({ types: [] }), { now: NOW });
+    expect(!r.ok && r.errors.type).toBe('Choose at least one type of event');
+  });
+
+  it('refuses types that are not on the list', () => {
+    const r = validateEvent(valid({ types: ['party'] }), { now: NOW });
+    expect(!r.ok && r.errors.type).toBe('Choose types from the list');
+  });
+
+  it('reads repeated type fields from the form, and turns stored types back into form values', () => {
+    const fd = new FormData();
+    fd.append('type', 'conference');
+    fd.append('type', 'workshop');
+    expect(readEventForm(fd).types).toEqual(['conference', 'workshop']);
+    const r = validateEvent(valid({ types: ['conference', 'workshop'] }), { now: NOW });
+    if (!r.ok) throw new Error('expected valid');
+    expect(recordToForm(r.record).types).toEqual(['conference', 'workshop']);
+    expect(EMPTY_EVENT_FORM.types).toEqual([]);
+  });
 });
 
 describe('validateEvent', () => {
@@ -88,6 +118,7 @@ describe('validateEvent', () => {
         'url',
         'timing',
         'start_date',
+        'type',
         'timezone',
         'format',
         'price',

@@ -1,5 +1,6 @@
 import { expect, expectNoAxeViolations, test } from '../a11y/fixtures.ts';
 import {
+  insertPendingEvent,
   clearOutbox,
   ensureAdmin,
   ensureUser,
@@ -211,5 +212,85 @@ test.describe('admin', () => {
     // The event's time explains its time zone abbreviation here too.
     await page.goto(`/admin/events/${id}`);
     await expect(page.locator('.lede abbr').first()).toHaveAttribute('title', /Mean Time|Universal Time/);
+  });
+  test('an event with no type cannot be published until one is added', async ({ page }) => {
+    const title = `Untyped ${uniq()}`;
+    const id = await insertPendingEvent(title);
+    await signIn(page, await ensureAdmin());
+    await expect(page.locator('tr', { hasText: title })).toContainText('Needs a type');
+    await page.goto(`/admin/events/${id}`);
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    await expect(page.locator('.error-summary')).toBeFocused();
+    await expect(page.locator('.error-summary')).toContainText('Add at least one type before publishing');
+    let { data } = await service().from('events').select('status, flags').eq('id', id).single();
+    expect(data!.status).toBe('pending');
+
+    await page.getByRole('checkbox', { name: 'Workshop', exact: true }).check();
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByText('Saved.')).toBeVisible();
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    await expect(page.getByText('Event published.')).toBeVisible();
+    ({ data } = await service().from('events').select('status, flags, types').eq('id', id).single());
+    expect(data).toEqual({ status: 'approved', flags: [], types: ['workshop'] });
+  });
+
+  test('chosen types survive a session expiring and a version conflict', async ({ page, browser, baseURL }) => {
+    const id = await submitEvent(page, `Types kept ${uniq()}`);
+    const admin = await ensureAdmin();
+    await signIn(page, admin, `/admin/events/${id}`);
+    await page.getByRole('checkbox', { name: 'Conference', exact: true }).check();
+    await page.getByRole('checkbox', { name: 'Training course', exact: true }).check();
+    const cookies = await page.context().cookies();
+    await page.context().clearCookies();
+    await page.context().addCookies(cookies.filter((c) => !c.name.startsWith('sb-')));
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await signIn(page, admin, `/admin/events/${id}`);
+    await expect(page.getByRole('checkbox', { name: 'Conference', exact: true })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Training course', exact: true })).toBeChecked();
+
+    // Someone else saves first; our ticked types are kept on the form.
+    const other = await (await browser.newContext({ baseURL: baseURL! })).newPage();
+    await signIn(other, admin, `/admin/events/${id}`);
+    await other.getByLabel('Event name').fill('Saved by the other admin');
+    await other.getByRole('button', { name: 'Save changes' }).click();
+    await expect(other.getByText('Saved.')).toBeVisible();
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.locator('.error-summary')).toContainText('Someone else changed this event');
+    await expect(page.getByRole('checkbox', { name: 'Conference', exact: true })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Training course', exact: true })).toBeChecked();
+  });
+
+  test('bulk publishing skips events that have no type yet', async ({ page }) => {
+    const typed = `Bulk typed ${uniq()}`;
+    const untyped = `Bulk untyped ${uniq()}`;
+    await submitEvent(page, typed);
+    const untypedId = await insertPendingEvent(untyped);
+    await signIn(page, await ensureAdmin());
+    await page.getByRole('checkbox', { name: typed }).check();
+    await page.getByRole('checkbox', { name: untyped }).check();
+    await page.getByRole('button', { name: 'Publish selected events' }).click();
+    await expect(page.getByRole('heading', { name: 'Publish 1 event?' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: "Can't publish yet: no type" })).toBeVisible();
+    await expect(page.locator('.notice--important')).toContainText(untyped);
+    await expectNoAxeViolations(page, 'bulk check with untyped');
+    await page.getByRole('button', { name: 'Publish these events' }).click();
+    // The check page already listed the untyped one, so only the typed one was sent.
+    await expect(page.getByText('Events published. 1 published.')).toBeVisible();
+    const { data } = await service().from('events').select('status').eq('id', untypedId).single();
+    expect(data!.status).toBe('pending');
+  });
+  test('a publish request sent without the check page still skips events with no type', async ({ page }) => {
+    const id = await insertPendingEvent(`Direct ${uniq()}`);
+    await signIn(page, await ensureAdmin());
+    const { data: ev } = await service().from('events').select('version').eq('id', id).single();
+    const res = await page.request.post('/admin/bulk', {
+      headers: { origin: new URL(page.url()).origin },
+      form: { step: 'confirm', event: `${id}:${ev!.version}` },
+      maxRedirects: 0,
+    });
+    expect(res.status()).toBe(200);
+    expect(await res.text()).toContain('None of these can be published yet');
+    const { data } = await service().from('events').select('status').eq('id', id).single();
+    expect(data!.status).toBe('pending');
   });
 });

@@ -37,7 +37,7 @@ const COLUMNS =
   'id,slug,title,summary,description,lang,organiser,url,all_day,starts_at,ends_at,start_date,end_date,timezone,' +
   'format,country_code,city,venue,price,captions,sign_language,step_free,quiet_room,hearing_loop,remote_attendance,' +
   'access_notes,status,flags,source,source_id,pending_changes,version,local_start_date,local_end_date,start_instant,' +
-  'end_instant,created_at,updated_at,approved_at';
+  'end_instant,created_at,updated_at,approved_at,types';
 
 export const ADMIN_PAGE_SIZE = 50;
 
@@ -131,6 +131,19 @@ export class VersionConflict extends Error {
   }
 }
 
+/** Thrown when publishing an event for the first time without any type. */
+export class NeedsTypeError extends Error {
+  constructor() {
+    super('Add at least one type before publishing');
+    this.name = 'NeedsTypeError';
+  }
+}
+
+/** Whether this action would publish an event for the first time without a type (the database refuses too). */
+export function blockedForType(e: Pick<AdminEvent, 'approved_at' | 'types'>, action: ModerationAction): boolean {
+  return TARGET[action] === 'approved' && !e.approved_at && e.types.length === 0;
+}
+
 /** Saves edited details. Throws VersionConflict if the event changed since `version` was read. */
 export async function saveEvent(id: string, version: number, record: EventRecord): Promise<AdminEvent> {
   const result = await db()
@@ -163,6 +176,7 @@ export async function moderate(
   reason = '',
 ): Promise<AdminEvent> {
   const e = detail.event;
+  if (blockedForType(e, action)) throw new NeedsTypeError();
   const to = detail.submitter?.email;
   const emails = [];
   // Only email on the first approval, not when an admin republishes.
@@ -180,6 +194,7 @@ export async function moderate(
     p_emails: emails,
   });
   if (error?.message === 'version_conflict') throw new VersionConflict();
+  if (error?.message === 'needs_type') throw new NeedsTypeError();
   if (error || !data)
     throw new ServiceError('supabase', `moderating event: ${error?.message ?? 'no data'}`, error?.code);
   if (emails.length) {

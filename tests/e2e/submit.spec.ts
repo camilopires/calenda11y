@@ -136,6 +136,24 @@ test.describe('adding an event', () => {
     await expect(page.getByLabel('End date')).toBeFocused();
   });
 
+  test('the type of event is required, explained, and shown on the check page', async ({ page }) => {
+    await page.goto('/submit');
+    const group = page.getByRole('group', { name: 'What kind of event is it?' });
+    await expect(group).toBeVisible();
+    await expect(group.locator('legend')).not.toContainText('optional');
+    await fillEventForm(page, { title: `Typed ${uniq()}`, types: [] });
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await page.locator('.error-summary').getByRole('link', { name: 'Choose at least one type of event' }).click();
+    await expect(page.getByRole('checkbox', { name: 'Conference', exact: true })).toBeFocused();
+    await page.getByRole('checkbox', { name: 'Conference', exact: true }).check();
+    await page.getByRole('checkbox', { name: 'Workshop', exact: true }).check();
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Check your answers' })).toBeVisible();
+    const row = page.locator('.check-answers__row', { has: page.getByText('Type', { exact: true }) });
+    await expect(row).toContainText('Conference');
+    await expect(row).toContainText('Workshop');
+  });
+
   test('a tampered check page is refused', async ({ page }) => {
     await page.goto('/submit');
     const res = await page.request.post('/submit', {
