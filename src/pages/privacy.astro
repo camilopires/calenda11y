@@ -1,5 +1,9 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { sponsorshipOpen } from '../lib/env';
+import { OPERATOR } from '../lib/site';
+
+const open = sponsorshipOpen();
 ---
 
 <BaseLayout title="Privacy" crumbLabel="Privacy">
@@ -8,6 +12,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     <p class="lede">What we collect, why, and how long we keep it.</p>
   </div>
   <div class="flow">
+    <h2>Who is responsible for your data</h2>
+    <p>
+      {OPERATOR.name}, trading as <a href={OPERATOR.url}>{OPERATOR.tradingAs}</a>, decides how your data is used. Email{' '}
+      <a href={`mailto:${OPERATOR.email}`}>{OPERATOR.email}</a>.
+    </p>
     <h2>If you just look at events</h2>
     <p>
       We don't use analytics, tracking or adverts. We set one cookie only if you change your
@@ -28,11 +37,15 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       We delete copies of the emails we send 90 days after sending them. When you unsubscribe, we delete the emails
       we've sent about your subscription straight away, and stop any that are on their way.
     </p>
-    <h2>If you sponsor calenda11y</h2>
-    <p>
-      Stripe handles your payment. We keep your name, email address and the details you choose to show on the sponsor
-      page. We never see your card details.
-    </p>
+    {open && (
+      <>
+        <h2>If you sponsor calenda11y</h2>
+        <p>
+          Stripe handles your payment. We keep your name, email address and the details you choose to show on the
+          sponsor page. We never see your card details.
+        </p>
+      </>
+    )}
     <h2>Spam protection</h2>
     <p>
       Forms use Cloudflare Turnstile to check you're a person. It doesn't ask you to solve puzzles. Cloudflare may
@@ -49,13 +62,15 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <li>Vercel hosts the website.</li>
       <li>Supabase stores the data.</li>
       <li>Resend sends emails.</li>
-      <li>Stripe takes sponsorship payments.</li>
+      {open && <li>Stripe takes sponsorship payments.</li>}
       <li>Cloudflare Turnstile protects forms from spam.</li>
       <li>OpenStreetMap's Nominatim finds places for "near me" searches.</li>
     </ul>
     <h2>Questions</h2>
     <p>
-      Email <a href="mailto:privacy@calenda11y.org">privacy@calenda11y.org</a> to ask about your data or to delete it.
+      Email <a href={`mailto:${OPERATOR.email}`}>{OPERATOR.email}</a> to ask about your data or to delete it. If you're
+      not happy with our answer, you can complain to the
+      <a href="https://ico.org.uk/make-a-complaint/">Information Commissioner's Office</a>.
     </p>
   </div>
 </BaseLayout>

@@ -31,9 +31,11 @@ test.describe('deployment smoke checks', () => {
 
   test('endpoints that authenticate themselves refuse bad credentials', async ({ request }) => {
     expect((await request.post('/api/cron/tick')).status()).toBe(401);
+    // With sponsorship off (the default) the webhook doesn't exist; once it's
+    // open, a bad signature is refused. Set SMOKE_SPONSORSHIP=open to match.
     expect(
       (await request.post('/api/stripe/webhook', { headers: { 'stripe-signature': 't=1,v1=x' }, data: '{}' })).status(),
-    ).toBe(400);
+    ).toBe(process.env.SMOKE_SPONSORSHIP === 'open' ? 400 : 404);
     expect((await request.post('/api/resend/webhook', { data: '{}' })).status()).toBe(401);
   });
 

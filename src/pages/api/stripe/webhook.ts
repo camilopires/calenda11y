@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { env } from '../../../lib/env';
+import { env, sponsorshipOpen } from '../../../lib/env';
 import { payments, verifyStripeWebhook } from '../../../lib/services/payments';
 import { clearSponsorCache } from '../../../lib/sponsors/public';
 import { applyPlan, planFromSession, planFromSubscription } from '../../../lib/sponsors/sync';
@@ -24,6 +24,7 @@ const SUBSCRIPTION_EVENTS = new Set([
  * If anything fails we answer 500 and Stripe tries again.
  */
 export const POST: APIRoute = async ({ request }) => {
+  if (!sponsorshipOpen()) return new Response(null, { status: 404 });
   const secret = env().STRIPE_WEBHOOK_SECRET;
   if (!secret) {
     console.error('[stripe webhook] STRIPE_WEBHOOK_SECRET is not set; refusing the request');

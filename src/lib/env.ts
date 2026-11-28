@@ -24,32 +24,43 @@ const DEV_SECRET = 'local-development-only-not-for-production';
 
 const secret = z.string().min(32, 'must be at least 32 characters');
 
-const productionSchema = z.object({
-  APP_ENV: z.literal('production'),
-  SITE_URL: z.url(),
-  SUPABASE_URL: z.url(),
-  SUPABASE_ANON_KEY: z.string().min(1),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
-  APP_SECRET: secret,
-  CRON_SECRET: secret,
-  STRIPE_SECRET_KEY: z.string().startsWith('sk_'),
-  STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_'),
-  RESEND_API_KEY: z.string().startsWith('re_'),
-  RESEND_WEBHOOK_SECRET: z.string().min(1),
-  EMAIL_FROM: z.string().min(3),
-  TURNSTILE_SITE_KEY: z.string().min(1),
-  TURNSTILE_SECRET_KEY: z.string().min(1),
-  LUMA_API_KEY: z.string().optional(),
-  MEETUP_CLIENT_ID: z.string().optional(),
-  MEETUP_CLIENT_SECRET: z.string().optional(),
-  // Place search for "near me". A setting, so the service can be switched
-  // (OpenStreetMap's policy asks for that) or turned off without a release.
-  GEOCODER_URL: z.url().default('https://nominatim.openstreetmap.org/search'),
-  GEOCODER_OFF: z.enum(['0', '1']).default('0'),
-});
+const productionSchema = z
+  .object({
+    APP_ENV: z.literal('production'),
+    SITE_URL: z.url(),
+    SUPABASE_URL: z.url(),
+    SUPABASE_ANON_KEY: z.string().min(1),
+    SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+    APP_SECRET: secret,
+    CRON_SECRET: secret,
+    // Sponsorship stays "coming soon" unless turned on, so a deploy can't take
+    // payments by accident. The Stripe keys are only needed once it's open.
+    SPONSORSHIP: z.enum(['open', 'soon']).default('soon'),
+    STRIPE_SECRET_KEY: z.string().startsWith('sk_').optional(),
+    STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_').optional(),
+    RESEND_API_KEY: z.string().startsWith('re_'),
+    RESEND_WEBHOOK_SECRET: z.string().min(1),
+    EMAIL_FROM: z.string().min(3),
+    TURNSTILE_SITE_KEY: z.string().min(1),
+    TURNSTILE_SECRET_KEY: z.string().min(1),
+    LUMA_API_KEY: z.string().optional(),
+    MEETUP_CLIENT_ID: z.string().optional(),
+    MEETUP_CLIENT_SECRET: z.string().optional(),
+    // Place search for "near me". A setting, so the service can be switched
+    // (OpenStreetMap's policy asks for that) or turned off without a release.
+    GEOCODER_URL: z.url().default('https://nominatim.openstreetmap.org/search'),
+    GEOCODER_OFF: z.enum(['0', '1']).default('0'),
+  })
+  .superRefine((e, ctx) => {
+    if (e.SPONSORSHIP !== 'open') return;
+    for (const key of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'] as const) {
+      if (!e[key]) ctx.addIssue({ code: 'custom', path: [key], message: 'needed when SPONSORSHIP=open' });
+    }
+  });
 
 const localSchema = z.object({
   APP_ENV: z.enum(['development', 'test']).default('development'),
+  SPONSORSHIP: z.enum(['open', 'soon']).default('open'),
   SITE_URL: z.url().default('http://localhost:4321'),
   SUPABASE_URL: z.url().default(LOCAL_SUPABASE_URL),
   SUPABASE_ANON_KEY: z.string().optional(),
@@ -121,6 +132,11 @@ export function requireEnv<K extends keyof Env>(key: K, hint: string): NonNullab
     throw new EnvError([`${String(key)} is not set. ${hint}`]);
   }
   return value as NonNullable<Env[K]>;
+}
+
+/** Whether the site takes sponsorship payments (SPONSORSHIP=open). */
+export function sponsorshipOpen(): boolean {
+  return env().SPONSORSHIP === 'open';
 }
 
 /** Only for tests. */

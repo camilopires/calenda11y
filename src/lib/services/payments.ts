@@ -193,9 +193,13 @@ class FakePayments implements Payments {
 
 let instance: Payments | undefined;
 
-/** Tests, and local development without a Stripe key, use the stand-in. */
+/**
+ * Tests, and local development without a Stripe key, use the stand-in. With
+ * sponsorship switched off there are no payments at all, fake or real.
+ */
 export function usesFakePayments(): boolean {
   const e = env();
+  if (e.SPONSORSHIP !== 'open') return false;
   return e.APP_ENV === 'test' || (e.APP_ENV === 'development' && !e.STRIPE_SECRET_KEY);
 }
 

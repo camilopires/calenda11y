@@ -1,5 +1,8 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import { sponsorshipOpen } from '../../lib/env';
+
+if (!sponsorshipOpen()) return new Response(null, { status: 404 });
 
 const token = Astro.url.searchParams.get('token') ?? '';
 ---

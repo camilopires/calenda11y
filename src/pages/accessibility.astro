@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { sponsorshipOpen } from '../lib/env';
 
 // Update these when the site is audited.
 const LAST_REVIEWED = '27 November 2026';
@@ -50,10 +51,12 @@ const MANUAL_AUDIT_DONE = false;
         ask for a plain-language summary of every event and check it before publishing, but we can't guarantee the
         reading level of text we didn't write.
       </li>
-      <li>
-        <strong>Payments.</strong> Sponsorship payments happen on pages run by Stripe. They are not covered by this
-        statement.
-      </li>
+      {sponsorshipOpen() && (
+        <li>
+          <strong>Payments.</strong> Sponsorship payments happen on pages run by Stripe. They are not covered by this
+          statement.
+        </li>
+      )}
       <li>
         <strong>Spam checks.</strong> Our forms use Cloudflare Turnstile, which normally works without you doing
         anything and never asks you to solve a puzzle. If it can't run, you can still send the form.

@@ -13,6 +13,9 @@ import {
   validateProfile,
   type ProfileValues,
 } from '../../lib/sponsors/profile';
+import { sponsorshipOpen } from '../../lib/env';
+
+if (!sponsorshipOpen()) return new Response(null, { status: 404 });
 
 // A one-time link from an email starts a session, but only when its button is
 // pressed (POST): email security scanners open links on their own.

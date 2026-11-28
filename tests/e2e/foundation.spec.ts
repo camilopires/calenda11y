@@ -12,6 +12,29 @@ test.describe('foundation', () => {
     });
   }
 
+  test('the about and privacy pages say who runs calenda11y and how to reach them', async ({ page }) => {
+    for (const path of ['/about', '/privacy']) {
+      await page.goto(path);
+      const main = page.locator('main');
+      await expect(main).toContainText('Camilo Pires, trading as camilopires.co.uk');
+      await expect(main.getByRole('link', { name: 'camilopires.co.uk' })).toHaveAttribute(
+        'href',
+        'https://camilopires.co.uk',
+      );
+      await expect(main.getByRole('link', { name: 'hello@calenda11y.org' }).first()).toHaveAttribute(
+        'href',
+        'mailto:hello@calenda11y.org',
+      );
+      await expect(main).not.toContainText('privacy@calenda11y.org');
+    }
+    await expect(page.getByRole('link', { name: /Information Commissioner/ })).toHaveAttribute(
+      'href',
+      'https://ico.org.uk/make-a-complaint/',
+    );
+    // With sponsorship open, the privacy page explains sponsor data.
+    await expect(page.getByRole('heading', { name: 'If you sponsor calenda11y' })).toBeVisible();
+  });
+
   test('styleguide and settings are valid HTML', async ({ page }) => {
     await expectValidHtml(page, '/styleguide?errors=1');
     await expectValidHtml(page, '/settings');

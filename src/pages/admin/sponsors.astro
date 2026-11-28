@@ -3,6 +3,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 import Field from '../../components/Field.astro';
 import { requireAdmin, takeDraft } from '../../lib/admin/auth';
 import { db } from '../../lib/db';
+import { sponsorshipOpen } from '../../lib/env';
 import { unwrap } from '../../lib/result';
 import { approveProfile, getSponsor, stagedLogoUrl, type SponsorRow } from '../../lib/sponsors/profile';
 import { clearSponsorCache } from '../../lib/sponsors/public';
@@ -103,6 +104,14 @@ const logos = new Map(
   <div class="page-head">
     <h1>Sponsors</h1>
   </div>
+  {!sponsorshipOpen() && (
+    <div class="notice">
+      <p>
+        Sponsorship is switched off on the site, so it says sponsorship opens soon. To take payments, set
+        SPONSORSHIP=open in Vercel, with the Stripe keys, and deploy again.
+      </p>
+    </div>
+  )}
   {message && (
     <div class="notice notice--success" role="status" tabindex="-1" data-focus-on-load>
       <p>{message}</p>

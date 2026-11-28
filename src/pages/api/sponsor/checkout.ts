@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { db } from '../../../lib/db';
-import { env } from '../../../lib/env';
+import { env, sponsorshipOpen } from '../../../lib/env';
 import { unwrap } from '../../../lib/result';
 import { LIMITS, allow, clientIp } from '../../../lib/security/ratelimit';
 import { randomToken, sha256 } from '../../../lib/security/tokens';
@@ -11,6 +11,7 @@ export const ATTEMPT_COOKIE = 'sponsor_attempt';
 
 /** Starts Stripe Checkout for a tier (monthly or yearly) or a one-off donation. */
 export const POST: APIRoute = async ({ request, cookies, clientAddress, redirect }) => {
+  if (!sponsorshipOpen()) return new Response(null, { status: 404 });
   const form = await request.formData();
   const tier = String(form.get('tier') ?? '');
   const interval = String(form.get('interval') ?? 'month');

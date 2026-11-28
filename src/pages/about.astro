@@ -1,5 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { sponsorshipOpen } from '../lib/env';
+import { OPERATOR } from '../lib/site';
 ---
 
 <BaseLayout title="About calenda11y" nav="about" crumbLabel="About">
@@ -24,9 +26,20 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <li>Get a weekly or monthly email of events, or an email when events are added or changed.</li>
     </ul>
     <h2>Who pays for it</h2>
+    {sponsorshipOpen() ? (
+      <p>
+        calenda11y is free to use and has no adverts. <a href="/sponsor">Sponsors</a> pay for hosting and moderation.
+        Sponsors never get special places in the list of events.
+      </p>
+    ) : (
+      <p>
+        calenda11y is free to use and has no adverts. <a href="/sponsor">Sponsorship</a> opens soon.
+      </p>
+    )}
+    <h2>Who runs calenda11y</h2>
     <p>
-      calenda11y is free to use and has no adverts. <a href="/sponsor">Sponsors</a> pay for hosting and moderation.
-      Sponsors never get special places in the list of events.
+      calenda11y is run by {OPERATOR.name}, trading as <a href={OPERATOR.url}>{OPERATOR.tradingAs}</a>. Email{' '}
+      <a href={`mailto:${OPERATOR.email}`}>{OPERATOR.email}</a> with questions or ideas.
     </p>
     <h2>Open data and open source</h2>
     <p>

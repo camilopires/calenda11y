@@ -11,6 +11,27 @@ process.env.E2E_STRIPE_WEBHOOK_SECRET ??= `whsec_${randomBytes(24).toString('bas
 process.env.E2E_RESEND_WEBHOOK_SECRET ??= `whsec_${randomBytes(24).toString('base64')}`;
 
 const PORT = Number(process.env.E2E_PORT ?? 4322);
+const SOON_PORT = PORT + 1;
+
+// Run `ADAPTER=node APP_ENV=test pnpm build` first.
+const server = (port: number, sponsorship: 'open' | 'soon') => ({
+  command: 'node dist/server/entry.mjs',
+  url: `http://127.0.0.1:${port}/settings`,
+  reuseExistingServer: !process.env.CI,
+  env: {
+    APP_ENV: 'test',
+    SPONSORSHIP: sponsorship,
+    HOST: '127.0.0.1',
+    PORT: String(port),
+    SITE_URL: `http://127.0.0.1:${port}`,
+    SUPABASE_URL: process.env.SUPABASE_URL!,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY!,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    STRIPE_WEBHOOK_SECRET: process.env.E2E_STRIPE_WEBHOOK_SECRET!,
+    RESEND_WEBHOOK_SECRET: process.env.E2E_RESEND_WEBHOOK_SECRET!,
+  },
+  timeout: 30_000,
+});
 
 export default defineConfig({
   testDir: 'tests/e2e',
@@ -24,23 +45,18 @@ export default defineConfig({
     trace: 'retain-on-failure',
     deviceScaleFactor: 1,
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], deviceScaleFactor: 1 } }],
-  webServer: {
-    // Run `ADAPTER=node APP_ENV=test pnpm build` first.
-    command: 'node dist/server/entry.mjs',
-    url: `http://127.0.0.1:${PORT}/settings`,
-    reuseExistingServer: !process.env.CI,
-    env: {
-      APP_ENV: 'test',
-      HOST: '127.0.0.1',
-      PORT: String(PORT),
-      SITE_URL: `http://127.0.0.1:${PORT}`,
-      SUPABASE_URL: process.env.SUPABASE_URL!,
-      SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY!,
-      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      STRIPE_WEBHOOK_SECRET: process.env.E2E_STRIPE_WEBHOOK_SECRET,
-      RESEND_WEBHOOK_SECRET: process.env.E2E_RESEND_WEBHOOK_SECRET,
+  projects: [
+    {
+      name: 'chromium',
+      testIgnore: /sponsorship-soon\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], deviceScaleFactor: 1 },
     },
-    timeout: 30_000,
-  },
+    {
+      // The same build with sponsorship switched off ("coming soon").
+      name: 'sponsorship-soon',
+      testMatch: /sponsorship-soon\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], deviceScaleFactor: 1, baseURL: `http://127.0.0.1:${SOON_PORT}` },
+    },
+  ],
+  webServer: [server(PORT, 'open'), server(SOON_PORT, 'soon')],
 });

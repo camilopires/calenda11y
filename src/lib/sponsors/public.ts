@@ -1,5 +1,6 @@
 /** Sponsors shown on the site (the public_sponsors view), cached briefly. */
 import { db } from '../db.ts';
+import { sponsorshipOpen } from '../env.ts';
 import { unwrap } from '../result.ts';
 import { publicLogoUrl } from './profile.ts';
 
@@ -47,6 +48,8 @@ export function clearSponsorCache(): void {
 
 /** For the footer: never let a problem with sponsors break a page. */
 export async function footerSponsors(): Promise<Array<{ name: string; url: string | null }>> {
+  // With sponsorship switched off, nobody is listed.
+  if (!sponsorshipOpen()) return [];
   try {
     return (await publicSponsors()).map((s) => ({ name: s.name, url: s.url }));
   } catch (error) {

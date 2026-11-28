@@ -3,13 +3,15 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import ErrorSummary from '../../components/ErrorSummary.astro';
 import Field from '../../components/Field.astro';
 import { db } from '../../lib/db';
-import { env } from '../../lib/env';
+import { env, sponsorshipOpen } from '../../lib/env';
 import { queued, sendNow } from '../../lib/email/outbox';
 import { sponsorLinks } from '../../lib/email/templates';
 import { isEmail } from '../../lib/forms/event';
 import { unwrap } from '../../lib/result';
 import { LIMITS, allow, clientIp } from '../../lib/security/ratelimit';
 import { randomToken, sha256 } from '../../lib/security/tokens';
+
+if (!sponsorshipOpen()) return new Response(null, { status: 404 });
 
 let email = '';
 let errors: Record<string, string> = {};

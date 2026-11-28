@@ -4,7 +4,7 @@ import { EnvError, parseEnv } from '../src/lib/env.ts';
 
 try {
   const e = parseEnv(process.env);
-  console.log(`Environment OK (APP_ENV=${e.APP_ENV})`);
+  console.log(`Environment OK (APP_ENV=${e.APP_ENV}, sponsorship ${e.SPONSORSHIP})`);
 } catch (error) {
   if (error instanceof EnvError) {
     console.error(error.message);

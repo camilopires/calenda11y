@@ -7,6 +7,9 @@ import { payments, type CheckoutSession } from '../../lib/services/payments';
 import { clearSponsorCache } from '../../lib/sponsors/public';
 import { applyPlan, planFromSession } from '../../lib/sponsors/sync';
 import { getSponsor, startSession } from '../../lib/sponsors/profile';
+import { sponsorshipOpen } from '../../lib/env';
+
+if (!sponsorshipOpen()) return new Response(null, { status: 404 });
 
 const ATTEMPT_COOKIE = 'sponsor_attempt';
 const sessionId = Astro.url.searchParams.get('session_id') ?? '';

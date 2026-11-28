@@ -74,7 +74,9 @@ There's also a manual checklist for screen reader testing before each release: [
    ```
    pg_cron then calls `/api/cron/tick` every 10 minutes. That runs imports (each source every 6 hours), sends queued emails, sends the digests and cleans up old data. **Admin → Scheduled jobs** shows what ran, and every admin page warns you if the scheduler stops.
 
-### 2. Stripe
+### 2. Stripe (optional at launch)
+
+The site can launch without payments. `SPONSORSHIP` is `soon` unless you set it: the sponsor page then says sponsorship opens soon, every payment page and endpoint is switched off, and the Stripe keys aren't needed. To take payments, do the steps below and set `SPONSORSHIP=open` with both Stripe keys. The build fails if either key is missing.
 
 1. Create the products and prices (safe to run again):
    ```sh
@@ -87,23 +89,24 @@ There's also a manual checklist for screen reader testing before each release: [
 
 ### 3. Resend
 
-Verify the sending domain. DKIM must sign the `List-Unsubscribe` and `List-Unsubscribe-Post` headers, which Resend does by default. Add a webhook at `https://calenda11y.org/api/resend/webhook` for `email.bounced` and `email.complained`.
+Verify the sending domain. The site shows `hello@calenda11y.org` as its contact address, so that address must receive mail: set up a mailbox or forwarding for it. DKIM must sign the `List-Unsubscribe` and `List-Unsubscribe-Post` headers, which Resend does by default. Add a webhook at `https://calenda11y.org/api/resend/webhook` for `email.bounced` and `email.complained`.
 
 ### 4. Vercel
 
-Use **Vercel Pro**: the free Hobby plan is for non-commercial use only, and this site takes sponsorship payments. Import the repository, then set the environment variables from [`.env.example`](.env.example), with `APP_ENV=production`. Every variable is required in production, and the build fails if one is missing. On Vercel every deploy counts as production, previews included, so give preview deploys their own complete set of values (Stripe test keys are fine).
+Use **Vercel Pro**: the free Hobby plan is for non-commercial use only, and this site takes sponsorship payments. Import the repository, then set the environment variables from [`.env.example`](.env.example), with `APP_ENV=production`. Every variable is required in production (the Stripe keys only once `SPONSORSHIP=open`), and the build fails if one is missing. On Vercel every deploy counts as production, previews included, so give preview deploys their own complete set of values (Stripe test keys are fine).
 
 | Variable                                                         | Where it comes from                                   |
 | ---------------------------------------------------------------- | ----------------------------------------------------- |
 | `SITE_URL`                                                       | `https://calenda11y.org`                              |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Supabase project settings → API                       |
 | `APP_SECRET`, `CRON_SECRET`                                      | `openssl rand -base64 48`, a different value for each |
-| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`                     | Stripe dashboard                                      |
+| `SPONSORSHIP`                                                    | `soon` (the default) or `open`                        |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`                     | Stripe dashboard, only when `SPONSORSHIP=open`        |
 | `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `EMAIL_FROM`          | Resend dashboard                                      |
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`                     | Cloudflare Turnstile (managed mode)                   |
 | `LUMA_API_KEY`, `MEETUP_CLIENT_ID`, `MEETUP_CLIENT_SECRET`       | Optional, for those imports                           |
 
-After deploying, run the smoke checks against the deployment: `SMOKE_URL=https://calenda11y.org pnpm test:smoke`.
+After deploying, run the smoke checks against the deployment: `SMOKE_URL=https://calenda11y.org pnpm test:smoke`. Add `SMOKE_SPONSORSHIP=open` once sponsorship is open.
 
 ### Import sources
 
