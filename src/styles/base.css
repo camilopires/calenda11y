@@ -319,12 +319,18 @@ main {
 
 .site-footer__grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
+}
+
+/* Sponsor names come from sponsors and can be one long word. */
+.site-footer__grid > * {
+  overflow-wrap: anywhere;
 }
 
 @media (min-width: 48em) {
   .site-footer__grid {
-    grid-template-columns: 2fr 1fr 1fr;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
   }
 }
 

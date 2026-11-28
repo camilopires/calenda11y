@@ -148,9 +148,40 @@ test.describe('long words and big text (1.4.10, 1.4.4)', () => {
     if (error) throw error;
   });
 
+  // A sponsor whose name is one long word, listed in every page's footer.
+  // Publishing it from the admin page also clears the cached sponsor list.
+  const sponsorName = `${long}Sponsor`;
+  test.beforeAll(async ({ browser }) => {
+    const { ensureAdmin, service, signIn } = await import('./support.ts');
+    const { data: sponsor, error } = await service()
+      .from('sponsors')
+      .insert({ stripe_customer_id: `cus_long${tag}`, name: sponsorName, profile_status: 'pending' })
+      .select('id')
+      .single();
+    if (error) throw error;
+    const { error: planError } = await service()
+      .from('sponsorships')
+      .insert({
+        sponsor_id: sponsor.id,
+        kind: 'subscription',
+        tier: 'supporter',
+        billing_interval: 'month',
+        stripe_subscription_id: `sub_long${tag}`,
+        stripe_status: 'active',
+        updated_from_stripe_at: new Date().toISOString(),
+      });
+    if (planError) throw planError;
+    const page = await browser.newPage();
+    await signIn(page, await ensureAdmin(), '/admin/sponsors');
+    await page.getByRole('button', { name: new RegExp(`^Publish profile\\s?: ${sponsorName}$`) }).click();
+    await expect(page.locator('.notice--success')).toBeVisible();
+    await page.close();
+  });
+
   test.afterAll(async () => {
     const { service } = await import('./support.ts');
     await service().from('events').delete().eq('slug', slug);
+    await service().from('sponsors').delete().eq('stripe_customer_id', `cus_long${tag}`);
   });
 
   const cases = [
@@ -183,6 +214,7 @@ test.describe('long words and big text (1.4.10, 1.4.4)', () => {
         if (path === '/submit' && c.width === 320 && /size=(175|200)&spacing=wide/.test(c.display)) continue;
         if (['/', '/topics/careers', '/countries/pt'].includes(path))
           await expect(page.getByRole('link', { name: `${long} meetup` })).toBeVisible();
+        await expect(page.locator('footer')).toContainText(sponsorName);
         const problem = await page.evaluate(() => {
           const vw = document.documentElement.clientWidth;
           if (document.documentElement.scrollWidth > vw)
